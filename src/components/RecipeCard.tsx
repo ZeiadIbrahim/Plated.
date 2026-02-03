@@ -7,6 +7,10 @@ import type { Recipe } from "@/types/recipe";
 type RecipeCardProps = {
   recipe: Recipe;
   onSave?: () => void;
+  isSaving?: boolean;
+  saveMessage?: string | null;
+  showSave?: boolean;
+  sourceUrl?: string | null;
 };
 
 const servingsLabel = (value: number) => `${value} serving${value === 1 ? "" : "s"}`;
@@ -189,7 +193,14 @@ const inferAllergens = (item: string) => {
   return Array.from(matches);
 };
 
-export const RecipeCard = ({ recipe, onSave }: RecipeCardProps) => {
+export const RecipeCard = ({
+  recipe,
+  onSave,
+  isSaving,
+  saveMessage,
+  showSave = true,
+  sourceUrl,
+}: RecipeCardProps) => {
   const [servings, setServings] = useState(recipe.original_servings);
   const [isMetric, setIsMetric] = useState(false);
   const computed = useRecipeMath(recipe, servings, isMetric);
@@ -217,11 +228,32 @@ export const RecipeCard = ({ recipe, onSave }: RecipeCardProps) => {
       <div className="flex flex-col gap-8 animate-fade-up">
         <header className="flex flex-col gap-3">
           <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
-            Plated Recipe
+            Plated. Recipe
           </p>
+          {recipe.image_url ? (
+            <div className="group relative overflow-hidden rounded-3xl border border-black/10 bg-white/80 shadow-[0_20px_50px_-35px_rgba(0,0,0,0.45)]">
+              <div className="absolute inset-0 bg-linear-to-br from-black/10 via-transparent to-black/15 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+              <img
+                src={recipe.image_url}
+                alt={computed.title}
+                loading="lazy"
+                className="aspect-video w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+              />
+            </div>
+          ) : null}
           <h1 className="text-4xl leading-tight text-[#111111]">
             {computed.title}
           </h1>
+          {sourceUrl ? (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs uppercase tracking-[0.2em] text-[#111111]/60 underline decoration-black/20 underline-offset-4 transition-colors duration-300 hover:text-[#111111]"
+            >
+              Original source
+            </a>
+          ) : null}
           <div className="flex flex-wrap items-center gap-3 text-sm text-[#111111]/70">
             <span>{servingsLabel(computed.servings)}</span>
             <span>•</span>
@@ -273,14 +305,22 @@ export const RecipeCard = ({ recipe, onSave }: RecipeCardProps) => {
                 {isMetric ? "Metric" : "Imperial"}
               </button>
             </div>
-            <button
-              type="button"
-              onClick={onSave}
-              className="cursor-pointer rounded-full bg-[#D9534F] px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#C94743] hover:shadow-[0_12px_28px_-18px_rgba(217,83,79,0.7)] hover:ring-1 hover:ring-[#D9534F]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9534F]"
-            >
-              Save
-            </button>
+            {showSave ? (
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={isSaving}
+                className="cursor-pointer rounded-full bg-[#D9534F] px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#C94743] hover:shadow-[0_12px_28px_-18px_rgba(217,83,79,0.7)] hover:ring-1 hover:ring-[#D9534F]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9534F] disabled:opacity-60"
+              >
+                {isSaving ? "Saving…" : "Save"}
+              </button>
+            ) : null}
           </div>
+          {saveMessage ? (
+            <p className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+              {saveMessage}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-10">
@@ -291,9 +331,10 @@ export const RecipeCard = ({ recipe, onSave }: RecipeCardProps) => {
             <div className="grid gap-6">
               {Object.entries(groupedIngredients).map(([group, items]) => (
                 <div key={group} className="grid gap-3">
-                  <h3 className="text-sm uppercase tracking-[0.2em] text-[#111111]/60">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.3em] text-[#111111]/70">
                     {group}
                   </h3>
+                  <div className="h-px w-full bg-black/10" />
                   <ul className="grid gap-3 text-base leading-relaxed text-[#111111]">
                     {items.map((ingredient, index) => {
                       const inferred = inferAllergens(ingredient.item);
@@ -326,7 +367,7 @@ export const RecipeCard = ({ recipe, onSave }: RecipeCardProps) => {
                                     {ALLERGEN_RULES[allergen]?.label ?? allergen[0]}
                                   </span>
                                   <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-max -translate-x-1/2 rounded-full border border-black/10 bg-white px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[#111111]/70 opacity-0 shadow-[0_12px_30px_-20px_rgba(0,0,0,0.4)] transition-all duration-200 group-hover:opacity-100">
-                                    This ingredient contains {allergen}
+                                    Contains {allergen}
                                   </span>
                                 </span>
                               ))}

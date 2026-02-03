@@ -9,6 +9,7 @@ export type RecipeIngredient = {
 export type Recipe = {
   title: string;
   original_servings: number;
+  image_url?: string | null;
   allergens?: string[];
   tips?: string[];
   rating?: {

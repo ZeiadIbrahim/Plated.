@@ -14,6 +14,257 @@ const cleanText = (html: string) => {
   return text.replace(/\s+/g, " ").trim();
 };
 
+const resolveImageUrl = (value: string, pageUrl: string) => {
+  if (!value) return "";
+  if (value.startsWith("data:")) return "";
+  if (value.startsWith("//")) {
+    try {
+      const base = new URL(pageUrl);
+      return `${base.protocol}${value}`;
+    } catch {
+      return "";
+    }
+  }
+  try {
+    return new URL(value, pageUrl).toString();
+  } catch {
+    return "";
+  }
+};
+
+const extractRecipeImage = (html: string, pageUrl: string) => {
+  const $ = cheerio.load(html);
+  const metaSelectors = [
+    "meta[property='og:image']",
+    "meta[property='og:image:url']",
+    "meta[name='og:image']",
+    "meta[name='twitter:image']",
+    "meta[property='twitter:image']",
+  ];
+
+  for (const selector of metaSelectors) {
+    const content = $(selector).attr("content");
+    if (content) {
+      const resolved = resolveImageUrl(content, pageUrl);
+      if (resolved) return resolved;
+    }
+  }
+
+  let imageFromSchema = "";
+  $("script[type='application/ld+json']").each((_, element) => {
+    if (imageFromSchema) return;
+    const raw = $(element).contents().text();
+    if (!raw) return;
+
+    try {
+      const data = JSON.parse(raw) as unknown;
+      const stack: unknown[] = [data];
+      while (stack.length && !imageFromSchema) {
+        const current = stack.pop();
+        if (!current || typeof current !== "object") continue;
+        if (Array.isArray(current)) {
+          stack.push(...current);
+          continue;
+        }
+        const value = current as Record<string, unknown>;
+        const typeValue = value["@type"];
+        const isRecipe = Array.isArray(typeValue)
+          ? typeValue.some((item) =>
+              typeof item === "string" ? item.toLowerCase() === "recipe" : false
+            )
+          : typeof typeValue === "string"
+            ? typeValue.toLowerCase() === "recipe"
+            : false;
+
+        if (isRecipe && value.image) {
+          const image = value.image as unknown;
+          if (typeof image === "string") {
+            imageFromSchema = resolveImageUrl(image, pageUrl);
+          } else if (Array.isArray(image)) {
+            const first = image.find((item) => typeof item === "string") as
+              | string
+              | undefined;
+            if (first) imageFromSchema = resolveImageUrl(first, pageUrl);
+          } else if (typeof image === "object" && image !== null) {
+            const imageUrl = (image as Record<string, unknown>).url;
+            if (typeof imageUrl === "string") {
+              imageFromSchema = resolveImageUrl(imageUrl, pageUrl);
+            }
+          }
+        }
+
+        Object.values(value).forEach((child) => stack.push(child));
+      }
+    } catch {
+      return;
+    }
+  });
+
+  return imageFromSchema || "";
+};
+
+const isRecipeStructuredData = (html: string) => {
+  const $ = cheerio.load(html);
+  let found = false;
+
+  $("script[type='application/ld+json']").each((_, element) => {
+    if (found) return;
+    const raw = $(element).contents().text();
+    if (!raw) return;
+
+    try {
+      const data = JSON.parse(raw) as unknown;
+      const stack: unknown[] = [data];
+      while (stack.length) {
+        const current = stack.pop();
+        if (!current || typeof current !== "object") continue;
+        if (Array.isArray(current)) {
+          stack.push(...current);
+          continue;
+        }
+        const value = current as Record<string, unknown>;
+        const typeValue = value["@type"];
+        if (typeof typeValue === "string") {
+          if (typeValue.toLowerCase() === "recipe") {
+            found = true;
+            return;
+          }
+        }
+        if (Array.isArray(typeValue)) {
+          const hasRecipe = typeValue
+            .map((item) => (typeof item === "string" ? item.toLowerCase() : ""))
+            .includes("recipe");
+          if (hasRecipe) {
+            found = true;
+            return;
+          }
+        }
+        Object.values(value).forEach((child) => stack.push(child));
+      }
+    } catch {
+      return;
+    }
+  });
+
+  if (found) return true;
+
+  const microdata = $("[itemscope][itemtype*='schema.org/Recipe']");
+  return microdata.length > 0;
+};
+
+const extractRecipeStructuredData = (
+  html: string
+): Record<string, unknown> | null => {
+  const $ = cheerio.load(html);
+  let recipeData: Record<string, unknown> | null = null;
+
+  $("script[type='application/ld+json']").each((_, element) => {
+    if (recipeData) return;
+    const raw = $(element).contents().text();
+    if (!raw) return;
+
+    try {
+      const data = JSON.parse(raw) as unknown;
+      const stack: unknown[] = [data];
+      while (stack.length && !recipeData) {
+        const current = stack.pop();
+        if (!current || typeof current !== "object") continue;
+        if (Array.isArray(current)) {
+          stack.push(...current);
+          continue;
+        }
+        const value = current as Record<string, unknown>;
+        const typeValue = value["@type"];
+        const isRecipe = Array.isArray(typeValue)
+          ? typeValue.some((item) =>
+              typeof item === "string" ? item.toLowerCase() === "recipe" : false
+            )
+          : typeof typeValue === "string"
+            ? typeValue.toLowerCase() === "recipe"
+            : false;
+        if (isRecipe) {
+          recipeData = value;
+          return;
+        }
+        Object.values(value).forEach((child) => stack.push(child));
+      }
+    } catch {
+      return;
+    }
+  });
+
+  return recipeData;
+};
+
+const normalizeRecipeYield = (value: unknown) => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const match = value.match(/\d+/);
+    if (match) return Number.parseInt(match[0], 10);
+  }
+  return null;
+};
+
+const normalizeSchemaInstructions = (value: unknown) => {
+  if (!value) return [] as string[];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => {
+        if (typeof item === "string") return [item];
+        if (item && typeof item === "object") {
+          const text = (item as Record<string, unknown>).text;
+          if (typeof text === "string") return [text];
+        }
+        return [] as string[];
+      })
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === "object") {
+    const text = (value as Record<string, unknown>).text;
+    if (typeof text === "string") return [text];
+  }
+  return [] as string[];
+};
+
+const looksLikeRecipeText = (text: string) => {
+  const lower = text.toLowerCase();
+  const ingredientSignals = [
+    "ingredients",
+    "instructions",
+    "directions",
+    "prep time",
+    "cook time",
+    "servings",
+  ];
+  const hits = ingredientSignals.filter((signal) => lower.includes(signal)).length;
+  return hits >= 2;
+};
+
+const looksPaywalled = (html: string, text: string) => {
+  const haystack = `${html} ${text}`.toLowerCase();
+  const signals = [
+    "subscribe to continue",
+    "subscribe to read",
+    "subscribe now",
+    "subscription required",
+    "member-only",
+    "members only",
+    "premium content",
+    "sign in to read",
+    "log in to read",
+    "already a subscriber",
+    "start your free trial",
+    "paywall",
+    "continue reading",
+    "unlock this recipe",
+    "this content is for subscribers",
+  ];
+
+  return signals.some((signal) => haystack.includes(signal));
+};
+
 const extractJson = (value: string) => {
   const firstBrace = value.indexOf("{");
   const lastBrace = value.lastIndexOf("}");
@@ -142,6 +393,15 @@ export async function POST(request: Request) {
 
     const response = await fetch(url);
     if (!response.ok) {
+      if ([402, 403, 451].includes(response.status)) {
+        return NextResponse.json(
+          {
+            error:
+              "This recipe appears to be behind a paywall. Please use a free recipe source.",
+          },
+          { status: 402 }
+        );
+      }
       return NextResponse.json(
         { error: "Failed to fetch URL" },
         { status: 400 }
@@ -150,6 +410,71 @@ export async function POST(request: Request) {
 
     const html = await response.text();
     const cleaned = cleanText(html);
+    const imageUrl = extractRecipeImage(html, url);
+
+    const hasStructuredRecipe = isRecipeStructuredData(html);
+    const hasRecipeText = looksLikeRecipeText(cleaned);
+    if (!hasStructuredRecipe && !hasRecipeText) {
+      return NextResponse.json(
+        { error: "This link doesn’t look like a recipe page." },
+        { status: 400 }
+      );
+    }
+
+    if (looksPaywalled(html, cleaned)) {
+      return NextResponse.json(
+        {
+          error:
+            "This recipe appears to be behind a paywall. Please use a free recipe source.",
+        },
+        { status: 402 }
+      );
+    }
+
+    const structured = extractRecipeStructuredData(html);
+    if (structured) {
+      const title = structured["name"];
+      const servings = normalizeRecipeYield(structured["recipeYield"]);
+      const ingredientsRaw = structured["recipeIngredient"];
+      const instructionsRaw = structured["recipeInstructions"];
+      const rating = structured["aggregateRating"] as
+        | { ratingValue?: number | string; ratingCount?: number | string }
+        | undefined;
+
+      const structuredIngredients = Array.isArray(ingredientsRaw)
+        ? ingredientsRaw
+            .map((item) => (typeof item === "string" ? item : ""))
+            .filter(Boolean)
+            .map((item) => normalizeIngredient({ item }))
+        : [];
+      const structuredInstructions = normalizeSchemaInstructions(instructionsRaw);
+
+      if (structuredIngredients.length && structuredInstructions.length) {
+        const normalized = {
+          title: typeof title === "string" ? title : "Untitled Recipe",
+          original_servings:
+            typeof servings === "number" && Number.isFinite(servings)
+              ? servings
+              : 1,
+          image_url: imageUrl || null,
+          rating: normalizeRating({
+            value:
+              rating?.ratingValue !== undefined
+                ? Number(rating.ratingValue)
+                : null,
+            count:
+              rating?.ratingCount !== undefined
+                ? Number(rating.ratingCount)
+                : null,
+          }),
+          allergens: [],
+          tips: [],
+          ingredients: structuredIngredients,
+          instructions: structuredInstructions,
+        };
+        return NextResponse.json(normalized, { status: 200 });
+      }
+    }
 
     if (!cleaned) {
       return NextResponse.json(
@@ -220,6 +545,7 @@ export async function POST(request: Request) {
       original_servings: Number.isFinite(json.original_servings)
         ? Number(json.original_servings)
         : 1,
+      image_url: imageUrl || null,
       rating: normalizeRating(json.rating),
       allergens: normalizeAllergens(json.allergens),
       tips: normalizeTips(json.tips),

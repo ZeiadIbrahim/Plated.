@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { RecipeCard } from "@/components/RecipeCard";
 import type { Recipe } from "@/types/recipe";
 import { supabase } from "@/lib/supabaseClient";
@@ -24,6 +25,7 @@ export default function Home() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
+  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -34,6 +36,142 @@ export default function Home() {
   const [profileAvatarUrl, setProfileAvatarUrl] = useState("");
   const [profileAvatarPreview, setProfileAvatarPreview] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [headerAvatarError, setHeaderAvatarError] = useState(false);
+  const [profileAvatarError, setProfileAvatarError] = useState(false);
+  const [chatMessages, setChatMessages] = useState<
+    Array<{ role: "user" | "assistant"; content: string }>
+  >([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [usedPrompts, setUsedPrompts] = useState<string[]>([]);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const baseSuggestions = useMemo(() => {
+    if (!recipe) return [] as string[];
+    const ingredientText = recipe.ingredients
+      .map((item) => item.item)
+      .join(" ")
+      .toLowerCase();
+    const instructionsText = recipe.instructions.join(" ").toLowerCase();
+    const has = (pattern: RegExp) => pattern.test(ingredientText);
+    const suggestions: string[] = [];
+
+    if (has(/\bsalt\b/)) {
+      suggestions.push("How can I reduce the salt?");
+    }
+    if (has(/\b(butter|cream|milk|cheese|yogurt|dairy)\b/)) {
+      suggestions.push("Suggest a dairy-free substitute.");
+    }
+    if (has(/\begg/)) {
+      suggestions.push("What can I use instead of eggs?");
+    }
+    if (has(/\b(flour|wheat|breadcrumbs|bread|pasta|gluten)\b/)) {
+      suggestions.push("How can I make this gluten-free?");
+    }
+    if (has(/\b(sugar|honey|maple|sweetener|syrup)\b/)) {
+      suggestions.push("How do I reduce the sugar?");
+    }
+    if (has(/\b(chicken|beef|pork|turkey|fish|salmon|tuna|shrimp)\b/)) {
+      suggestions.push("How can I make this vegetarian?");
+    }
+    if (/\b(bake|roast)\b/.test(instructionsText)) {
+      suggestions.push("Any tips for a crispier finish?");
+    }
+
+    const evergreen = [
+      "Can I make this ahead of time?",
+      "How should I store leftovers?",
+      "What sides pair well with this?",
+      "How do I scale this for a crowd?",
+    ];
+
+    return Array.from(new Set([...suggestions, ...evergreen]));
+  }, [recipe]);
+  const chatSuggestions = useMemo(() => {
+    if (!recipe) return [] as string[];
+    const lastUser = [...chatMessages]
+      .reverse()
+      .find((message) => message.role === "user")?.content
+      .toLowerCase();
+    const contextual: string[] = [];
+
+    if (lastUser?.includes("gluten")) {
+      contextual.push("What swaps keep the texture similar?");
+    }
+    if (lastUser?.includes("dairy")) {
+      contextual.push("Will the flavor change with the swap?");
+    }
+    if (lastUser?.includes("egg")) {
+      contextual.push("How should I adjust baking time?");
+    }
+    if (lastUser?.includes("salt") || lastUser?.includes("sodium")) {
+      contextual.push("How can I keep it flavorful without salt?");
+    }
+    if (lastUser?.includes("vegetarian") || lastUser?.includes("vegan")) {
+      contextual.push("What protein swap works best here?");
+    }
+
+    const unique = Array.from(
+      new Set([...contextual, ...baseSuggestions])
+    ).filter((prompt) => !usedPrompts.includes(prompt));
+
+    return unique.slice(0, 4);
+  }, [baseSuggestions, chatMessages, recipe, usedPrompts]);
+
+  const normalizeAvatarUrl = (value: unknown) => {
+    if (typeof value !== "string") return "";
+    if (!value.trim()) return "";
+    return value;
+  };
+
+  const persistHeaderIdentity = (avatar: string | null, initial: string) => {
+    if (typeof window === "undefined") return;
+    if (avatar) {
+      localStorage.setItem("plated.avatar", avatar);
+    } else {
+      localStorage.removeItem("plated.avatar");
+    }
+    localStorage.setItem("plated.initial", initial);
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cachedAvatar = localStorage.getItem("plated.avatar");
+    const cachedInitial = localStorage.getItem("plated.initial");
+    if (cachedAvatar) {
+      setHeaderAvatarUrl(cachedAvatar);
+    }
+    if (cachedInitial) {
+      setProfileFirstName(cachedInitial);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!recipe) return;
+    setChatMessages([
+      {
+        role: "assistant",
+        content:
+          "Ask me about substitutions, timing, or how to adjust this recipe.",
+      },
+    ]);
+    setChatInput("");
+    setChatError(null);
+    setChatOpen(false);
+    setUsedPrompts([]);
+  }, [recipe]);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    const container = chatScrollRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [chatMessages, chatLoading, chatOpen]);
 
   const strengthScore = (() => {
     if (!password) return 0;
@@ -63,39 +201,12 @@ export default function Home() {
   const strengthWidths = [12, 40, 65, 85, 100];
   const strengthWidth = strengthWidths[strengthScore] ?? 12;
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setIsSignedIn(!!data.session);
-      setAuthUserEmail(data.session?.user.email ?? null);
-      setAuthChecking(false);
-    };
-
-    loadSession();
-
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!mounted) return;
-        setIsSignedIn(!!session);
-        setAuthUserEmail(session?.user.email ?? null);
-      }
-    );
-
-    return () => {
-      mounted = false;
-      subscription.subscription.unsubscribe();
-    };
-  }, []);
-
   const resetAuthState = () => {
     setAuthError(null);
     setAuthSuccess(null);
   };
 
-  const loadProfile = async () => {
+  async function loadProfile() {
     setProfileError(null);
     setProfileMessage(null);
     setProfileLoading(true);
@@ -126,10 +237,105 @@ export default function Home() {
       (metadata.first_name ?? inferredName)?.split(" ")[0] ?? ""
     );
     setProfileBio(metadata.bio ?? "");
-    setProfileAvatarUrl(metadata.avatar_url ?? "");
-    setProfileAvatarPreview(metadata.avatar_url ?? "");
+    const avatarSource = normalizeAvatarUrl(
+      metadata.avatar_url ?? metadata.picture
+    );
+    setProfileAvatarError(false);
+    setProfileAvatarUrl(avatarSource);
+    setProfileAvatarPreview(avatarSource);
     setProfileLoading(false);
-  };
+  }
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setIsSignedIn(!!data.session);
+      setAuthUserEmail(data.session?.user.email ?? null);
+      setAuthChecking(false);
+      if (data.session) {
+        const { data: userData } = await supabase.auth.getUser();
+        const metadata = userData.user?.user_metadata ?? {};
+        const inferredName =
+          metadata.full_name ??
+          metadata.name ??
+          metadata.given_name ??
+          metadata.first_name ??
+          "";
+        const firstName =
+          (metadata.first_name ?? inferredName)?.split(" ")[0] ?? "";
+        setProfileFirstName(firstName);
+        const avatarUrl = normalizeAvatarUrl(metadata.avatar_url ?? metadata.picture);
+        setHeaderAvatarError(false);
+        setHeaderAvatarUrl(avatarUrl || null);
+        persistHeaderIdentity(avatarUrl || null, (firstName?.[0] ?? "P").toUpperCase());
+      } else {
+        setHeaderAvatarUrl(null);
+      }
+    };
+
+    loadSession();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return;
+        setIsSignedIn(!!session);
+        setAuthUserEmail(session?.user.email ?? null);
+        if (!session) {
+          setHeaderAvatarUrl(null);
+          setProfileFirstName("");
+          persistHeaderIdentity(null, "P");
+        } else {
+          supabase.auth.getUser().then(({ data: userData }) => {
+            const metadata = userData.user?.user_metadata ?? {};
+            const inferredName =
+              metadata.full_name ??
+              metadata.name ??
+              metadata.given_name ??
+              metadata.first_name ??
+              "";
+            const firstName =
+              (metadata.first_name ?? inferredName)?.split(" ")[0] ?? "";
+            setProfileFirstName(firstName);
+            const avatarUrl = normalizeAvatarUrl(
+              metadata.avatar_url ?? metadata.picture
+            );
+            setHeaderAvatarError(false);
+            setHeaderAvatarUrl(avatarUrl || null);
+            persistHeaderIdentity(avatarUrl || null, (firstName?.[0] ?? "P").toUpperCase());
+          });
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const wantsAuth = searchParams.get("auth") === "1";
+    const wantsProfile = searchParams.get("profile") === "1";
+
+    if (wantsAuth) {
+      setShowAuth(true);
+      router.replace("/");
+      return;
+    }
+
+    if (wantsProfile) {
+      if (isSignedIn) {
+        setShowProfile(true);
+        loadProfile();
+      } else {
+        setShowAuth(true);
+      }
+      router.replace("/");
+    }
+  }, [isSignedIn, router, searchParams]);
 
   const handleProfileSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -182,6 +388,10 @@ export default function Home() {
       return;
     }
 
+    setHeaderAvatarError(false);
+    setHeaderAvatarUrl(avatarUrl ?? null);
+    persistHeaderIdentity(avatarUrl ?? null, (profileFirstName?.[0] ?? "P").toUpperCase());
+    setProfileFirstName(profileFirstName);
     setProfileMessage("Profile updated successfully.");
     setProfileLoading(false);
   };
@@ -321,6 +531,7 @@ export default function Home() {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
+    setSaveMessage(null);
 
     try {
       const response = await fetch("/api/parse", {
@@ -342,6 +553,114 @@ export default function Home() {
     }
   };
 
+  const handleSaveRecipe = async () => {
+    if (!recipe) return;
+    setSaveMessage(null);
+
+    if (!isSignedIn) {
+      setShowAuth(true);
+      return;
+    }
+
+    setIsSaving(true);
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (!user) {
+      setShowAuth(true);
+      setIsSaving(false);
+      return;
+    }
+
+    const { data: existing } = await supabase
+      .from("recipes")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("source_url", url)
+      .maybeSingle();
+
+    if (existing) {
+      setSaveMessage("Already saved.");
+      setIsSaving(false);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("recipes").insert({
+      user_id: user.id,
+      title: recipe.title,
+      original_servings: recipe.original_servings,
+      source_url: url,
+      payload: recipe,
+      rating_value: recipe.rating?.value ?? null,
+      rating_count: recipe.rating?.count ?? null,
+      allergens: recipe.allergens ?? [],
+      tips: recipe.tips ?? [],
+    });
+
+    if (insertError) {
+      setSaveMessage("Unable to save recipe.");
+      setIsSaving(false);
+      return;
+    }
+
+    setSaveMessage("Saved to your recipes.");
+    setIsSaving(false);
+  };
+
+  const handleChatSubmit = async (promptOverride?: string | unknown) => {
+    if (!recipe) return;
+    const overrideText = typeof promptOverride === "string" ? promptOverride : null;
+    const question = (overrideText ?? chatInput).trim();
+    if (!question) return;
+    if (!overrideText) {
+      setChatInput("");
+    }
+    if (overrideText) {
+      setUsedPrompts((prev) =>
+        prev.includes(overrideText) ? prev : [...prev, overrideText]
+      );
+    }
+    setChatError(null);
+    setChatLoading(true);
+    setChatMessages((prev) => [
+      ...prev,
+      { role: "user", content: question },
+    ]);
+
+    try {
+      const response = await fetch("/api/recipe-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipe,
+          question,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Unable to answer right now.");
+      }
+
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.answer ?? "" },
+      ]);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const formatChatMessage = (value: string) => {
+    const escaped = value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    const withBold = escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return withBold.replace(/\n/g, "<br />");
+  };
+
   return (
     <main className="min-h-screen bg-[#FAFAFA]">
       <button
@@ -354,11 +673,52 @@ export default function Home() {
             setShowAuth(true);
           }
         }}
-        className="fixed left-5 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)]"
+        className="fixed left-5 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-5"
         aria-label="Account"
       >
+        {isSignedIn && headerAvatarUrl && !headerAvatarError ? (
+          <img
+            src={headerAvatarUrl}
+            alt="Profile"
+            className="h-8 w-8 rounded-full object-cover"
+            referrerPolicy="no-referrer"
+            onError={() => setHeaderAvatarError(true)}
+          />
+        ) : isSignedIn ? (
+          <span className="text-sm font-semibold text-[#111111]/80">
+            {(profileFirstName?.[0] ?? authUserEmail?.[0] ?? "P").toUpperCase()}
+          </span>
+        ) : (
+          <svg
+            className="animate-icon-breathe"
+            aria-hidden="true"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="8" r="3.2" />
+            <path d="M5 20c1.8-4.2 11.2-4.2 14 0" />
+          </svg>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (isSignedIn) {
+            router.push("/recipes");
+          } else {
+            setShowAuth(true);
+          }
+        }}
+        className="fixed left-16 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-20"
+        aria-label="Recipes"
+      >
         <svg
-          className="animate-icon-breathe"
           aria-hidden="true"
           width="20"
           height="20"
@@ -369,22 +729,24 @@ export default function Home() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <circle cx="12" cy="8" r="3.2" />
-          <path d="M5 20c1.8-4.2 11.2-4.2 14 0" />
+          <path d="M6 4h9a3 3 0 0 1 3 3v13H6z" />
+          <path d="M6 4v16" />
+          <path d="M9 8h6" />
+          <path d="M9 12h6" />
         </svg>
       </button>
-      <section className="mx-auto w-full max-w-2xl px-4 pb-6 pt-12 sm:px-6 sm:pt-16">
+      <section className="mx-auto w-full max-w-2xl px-4 pb-6 pt-24 sm:px-6 sm:pt-16">
         <div className="flex flex-col gap-8">
           <header className="flex flex-col gap-4 animate-fade-up">
             <p className="text-5xl font-semibold leading-none tracking-tight text-[#111111] sm:text-6xl">
               Plated.
             </p>
             <h1 className="text-3xl leading-tight text-[#111111] sm:text-4xl">
-              Import a recipe from any URL
+              Import a recipe URL.
             </h1>
             <p className="text-sm text-[#111111]/70 sm:text-base">
               Paste a recipe link and let us extract ingredients and
-              instructions.
+              instructions. No ads. No life stories.
             </p>
           </header>
 
@@ -425,14 +787,162 @@ export default function Home() {
       </section>
 
       {recipe && (
-        <RecipeCard
-          recipe={recipe}
-          onSave={() => {
-            if (!isSignedIn || authChecking) {
-              setShowAuth(true);
-            }
-          }}
-        />
+        <>
+          <section className="mx-auto w-full max-w-2xl px-4 pb-8 sm:px-6">
+            <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/70 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.35)]">
+              <button
+                type="button"
+                onClick={() => setChatOpen((prev) => !prev)}
+                className={`flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-all duration-500 ${
+                  chatOpen
+                    ? "bg-black/5"
+                    : "bg-white/80 hover:bg-black/5"
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white shadow-[0_12px_30px_-20px_rgba(0,0,0,0.5)]">
+                    <svg
+                      aria-hidden="true"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-[#111111]/70"
+                    >
+                      <path d="M12 2v2" />
+                      <path d="M12 20v2" />
+                      <path d="M4.9 4.9l1.4 1.4" />
+                      <path d="M17.7 17.7l1.4 1.4" />
+                      <path d="M2 12h2" />
+                      <path d="M20 12h2" />
+                      <path d="M4.9 19.1l1.4-1.4" />
+                      <path d="M17.7 6.3l1.4-1.4" />
+                      <circle cx="12" cy="12" r="4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
+                      Plated Assist
+                    </p>
+                    <h2 className="text-lg text-[#111111]">
+                      Ask about this recipe
+                    </h2>
+                    <p className="text-sm text-[#111111]/70">
+                      Substitutions, timing, and ingredient swaps—instantly.
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                  {chatOpen ? "Close" : "Open"}
+                </span>
+              </button>
+
+              <div
+                className={`grid transition-all duration-500 ease-out ${
+                  chatOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <div className="overflow-hidden px-6 pb-6">
+                  <div
+                    ref={chatScrollRef}
+                    className="flex max-h-80 flex-col gap-4 overflow-y-auto rounded-2xl border border-black/10 bg-white/60 p-4"
+                  >
+                    {chatMessages.map((message, index) => (
+                      <div
+                        key={`${message.role}-${index}`}
+                        className={`flex ${
+                          message.role === "user"
+                            ? "justify-end"
+                            : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-[0_18px_45px_-35px_rgba(0,0,0,0.5)] ${
+                            message.role === "user"
+                              ? "bg-[#111111] text-white"
+                              : "bg-white text-[#111111]/80"
+                          }`}
+                        >
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: formatChatMessage(message.content),
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading ? (
+                      <div className="flex justify-start">
+                        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-[#111111]/70">
+                          Thinking…
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {chatError ? (
+                    <p className="mt-3 text-sm text-[#D9534F]">{chatError}</p>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {chatSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => {
+                          if (chatLoading) return;
+                          handleChatSubmit(suggestion);
+                        }}
+                        className="rounded-full border border-black/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={chatInput}
+                      onChange={(event) => setChatInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          handleChatSubmit();
+                        }
+                      }}
+                      placeholder="Ask about swaps, timing, or ingredients…"
+                      className="flex-1 rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleChatSubmit}
+                      disabled={chatLoading || !chatInput.trim()}
+                      className="inline-flex items-center justify-center rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_14px_36px_-22px_rgba(17,17,17,0.8)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Ask
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <RecipeCard
+            recipe={recipe}
+            onSave={() => {
+              if (!isSignedIn || authChecking) {
+                setShowAuth(true);
+                return;
+              }
+              handleSaveRecipe();
+            }}
+            isSaving={isSaving}
+            saveMessage={saveMessage}
+          />
+        </>
       )}
 
       {showAuth && (
@@ -441,7 +951,7 @@ export default function Home() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
-                  Plated
+                  Plated.
                 </p>
                 <h2 className="text-2xl text-[#111111]">
                   Save your recipes
@@ -859,10 +1369,15 @@ export default function Home() {
                       src={profileAvatarPreview}
                       alt="Profile"
                       className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                      onError={() => {
+                        setProfileAvatarError(true);
+                        setProfileAvatarPreview("");
+                      }}
                     />
                   ) : (
-                    <div className="text-xs uppercase tracking-[0.2em] text-[#111111]/40">
-                      Add photo
+                    <div className="flex h-full w-full items-center justify-center text-2xl font-semibold text-[#111111]/70">
+                      {(profileFirstName?.[0] ?? authUserEmail?.[0] ?? "P").toUpperCase()}
                     </div>
                   )}
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-[11px] uppercase tracking-[0.2em] text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">

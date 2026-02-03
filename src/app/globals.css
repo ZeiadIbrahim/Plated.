@@ -21,6 +21,20 @@ body {
   letter-spacing: 0.01em;
 }
 
+html {
+  transition: filter 420ms ease, background-color 420ms ease;
+}
+
+html.theme-dark {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #111111;
+}
+
+html.theme-dark img,
+html.theme-dark video {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 * {
   transition-property: color, background-color, border-color, box-shadow, transform,
     opacity;
@@ -42,6 +56,14 @@ input,
 select,
 textarea {
   font-family: var(--font-ui), sans-serif;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 @keyframes fade-up {
