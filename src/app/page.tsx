@@ -774,7 +774,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAFAFA]">
+    <main className="min-h-screen bg-[#FAFAFA]" suppressHydrationWarning>
       <button
         type="button"
         onClick={() => {
@@ -1503,8 +1503,8 @@ export default function Home() {
       )}
 
       {showProfile && isSignedIn && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-black/10 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
+        <div className="fixed inset-0 z-30 flex items-start justify-center bg-black/40 px-4 py-6 sm:items-center">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl border border-black/10 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
@@ -1676,8 +1676,8 @@ export default function Home() {
       )}
 
       {showDeleteModal && showDeleteConfirm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-[#D9534F]/20 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 px-4 py-6 sm:items-center">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl border border-[#D9534F]/20 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[#D9534F]/70">

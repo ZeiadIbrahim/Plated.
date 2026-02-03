@@ -14,15 +14,10 @@ export default function SavedRecipePage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("plated.avatar");
-  });
-  const [headerInitial, setHeaderInitial] = useState(() => {
-    if (typeof window === "undefined") return "P";
-    return localStorage.getItem("plated.initial") ?? "P";
-  });
+  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(null);
+  const [headerInitial, setHeaderInitial] = useState("P");
   const [headerAvatarError, setHeaderAvatarError] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [chatMessages, setChatMessages] = useState<
     Array<{ role: "user" | "assistant"; content: string }>
   >([]);
@@ -103,6 +98,20 @@ export default function SavedRecipePage() {
 
     return unique.slice(0, 4);
   }, [baseSuggestions, chatMessages, recipe, usedPrompts]);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    const cachedAvatar = localStorage.getItem("plated.avatar");
+    const cachedInitial = localStorage.getItem("plated.initial") ?? "P";
+    if (cachedAvatar) {
+      setHeaderAvatarUrl(cachedAvatar);
+    }
+    setHeaderInitial(cachedInitial);
+  }, [isMounted]);
 
   useEffect(() => {
     const loadHeader = async () => {
@@ -269,7 +278,7 @@ export default function SavedRecipePage() {
         className="fixed left-5 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-5"
         aria-label="Account"
       >
-        {headerAvatarUrl && !headerAvatarError ? (
+        {isMounted && headerAvatarUrl && !headerAvatarError ? (
           <img
             src={headerAvatarUrl}
             alt="Profile"
@@ -312,7 +321,8 @@ export default function SavedRecipePage() {
         </div>
       ) : recipe ? (
         <>
-          <section className="mx-auto w-full max-w-2xl px-4 pb-8 sm:px-6">
+          <RecipeCard recipe={recipe} showSave={false} sourceUrl={sourceUrl} />
+          <section className="mx-auto w-full max-w-2xl px-4 pb-12 pt-6 sm:px-6">
             <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/70 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
@@ -454,7 +464,6 @@ export default function SavedRecipePage() {
               </div>
             </div>
           </section>
-          <RecipeCard recipe={recipe} showSave={false} sourceUrl={sourceUrl} />
         </>
       ) : (
         <div className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6 sm:py-16">

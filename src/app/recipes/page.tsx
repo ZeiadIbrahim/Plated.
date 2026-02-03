@@ -20,6 +20,8 @@ export default function RecipesPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<SavedRecipe | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const router = useRouter();
   const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -130,6 +132,7 @@ export default function RecipesPage() {
   };
 
   const deleteRecipe = async (id: string) => {
+    setDeleteLoading(true);
     const { error: deleteError } = await supabase
       .from("recipes")
       .delete()
@@ -138,6 +141,7 @@ export default function RecipesPage() {
     if (!deleteError) {
       setRecipes((prev) => prev.filter((recipe) => recipe.id !== id));
     }
+    setDeleteLoading(false);
   };
 
   return (
@@ -283,11 +287,7 @@ export default function RecipesPage() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        const confirmed = window.confirm(
-                          "Delete this recipe? This can’t be undone."
-                        );
-                        if (!confirmed) return;
-                        deleteRecipe(recipe.id);
+                        setDeleteTarget(recipe);
                       }}
                       className="rounded-full border border-[#D9534F]/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#D9534F]"
                     >
@@ -300,6 +300,59 @@ export default function RecipesPage() {
           )}
         </div>
       </section>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 px-4 py-6 sm:items-center">
+          <div className="w-full max-w-md rounded-3xl border border-[#D9534F]/20 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#D9534F]/70">
+                  Delete recipe
+                </p>
+                <h2 className="text-2xl text-[#111111]">
+                  Remove this recipe?
+                </h2>
+                <p className="text-sm text-[#111111]/70">
+                  “{deleteTarget.title}” will be removed from your saved recipes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-[#D9534F]/20 bg-[#D9534F]/5 p-4 text-sm text-[#111111]/80">
+              This action can’t be undone.
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!deleteTarget) return;
+                  await deleteRecipe(deleteTarget.id);
+                  setDeleteTarget(null);
+                }}
+                disabled={deleteLoading}
+                className="cursor-pointer rounded-full bg-[#D9534F] px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#C94743] disabled:opacity-60"
+              >
+                {deleteLoading ? "Deleting…" : "Confirm delete"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="cursor-pointer rounded-full border border-black/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
