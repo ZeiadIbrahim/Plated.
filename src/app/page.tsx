@@ -854,10 +854,10 @@ export default function Home() {
               Plated.
             </p>
             <h1 className="text-3xl leading-tight text-[#111111] sm:text-4xl">
-              Import a recipe URL.
+              Insert a link below.
             </h1>
             <p className="text-sm text-[#111111]/70 sm:text-base">
-              Paste a recipe link and let us extract ingredients and
+              Let us extract the ingredients and
               instructions. No ads. No life stories.
             </p>
           </header>

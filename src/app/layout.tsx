@@ -56,10 +56,10 @@ export default function RootLayout({
                 <p className="text-xs uppercase tracking-[0.3em] text-[#FAFAFA]/60">
                   Plated
                 </p>
-                <h2 className="text-2xl">A modern editorial cookbook.</h2>
+                <h2 className="text-2xl">A modern cookbook.</h2>
                 <p className="text-sm text-[#FAFAFA]/70">
                   Save, parse, and perfect recipes with a calm, premium reading
-                  experience.
+                  experience. No ads. No distractions.
                 </p>
               </div>
 

@@ -432,6 +432,18 @@ export async function POST(request: Request) {
     }
 
     const structured = extractRecipeStructuredData(html);
+    let structuredRecipe: {
+      title: string;
+      original_servings: number;
+      image_url: string | null;
+      rating: { value: number | null; count: number | null };
+      allergens: string[];
+      tips: string[];
+      ingredients: ReturnType<typeof normalizeIngredient>[];
+      instructions: string[];
+    } | null = null;
+    let needsEnrichment = false;
+
     if (structured) {
       const title = structured["name"];
       const servings = normalizeRecipeYield(structured["recipeYield"]);
@@ -472,7 +484,19 @@ export async function POST(request: Request) {
           ingredients: structuredIngredients,
           instructions: structuredInstructions,
         };
-        return NextResponse.json(normalized, { status: 200 });
+        const groups = Array.from(
+          new Set(
+            normalized.ingredients.map(
+              (ingredient) => ingredient.group?.trim() || "Ingredients"
+            )
+          )
+        );
+        const hasGrouping = groups.length > 1 || groups[0] !== "Ingredients";
+        needsEnrichment = !hasGrouping || normalized.tips.length === 0;
+        structuredRecipe = normalized;
+        if (!needsEnrichment) {
+          return NextResponse.json(normalized, { status: 200 });
+        }
       }
     }
 
@@ -556,6 +580,27 @@ export async function POST(request: Request) {
         ? json.instructions
         : [],
     };
+
+    if (structuredRecipe) {
+      const merged = {
+        ...structuredRecipe,
+        ...normalized,
+        image_url:
+          imageUrl || normalized.image_url || structuredRecipe.image_url || null,
+        ingredients: normalized.ingredients.length
+          ? normalized.ingredients
+          : structuredRecipe.ingredients,
+        instructions: normalized.instructions.length
+          ? normalized.instructions
+          : structuredRecipe.instructions,
+        tips: normalized.tips.length ? normalized.tips : structuredRecipe.tips,
+        rating:
+          normalized.rating.value !== null || normalized.rating.count !== null
+            ? normalized.rating
+            : structuredRecipe.rating,
+      };
+      return NextResponse.json(merged, { status: 200 });
+    }
 
     return NextResponse.json(normalized, { status: 200 });
   } catch (error) {
