@@ -8,6 +8,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const payload = await request.json().catch(() => null);
+
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -39,9 +41,54 @@ export async function POST(request: Request) {
       );
     }
 
+    const { error: recipesError } = await adminClient
+      .from("recipes")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (recipesError) {
+      return NextResponse.json(
+        { error: "Failed to delete recipes.", detail: recipesError.message },
+        { status: 500 }
+      );
+    }
+
+
+    const { data: avatarFiles, error: listError } = await adminClient.storage
+      .from("avatars")
+      .list(user.id, { limit: 100 });
+
+    if (!listError && avatarFiles?.length) {
+      const paths = avatarFiles.map((file) => `${user.id}/${file.name}`);
+      const { error: removeError } = await adminClient.storage
+        .from("avatars")
+        .remove(paths);
+      if (removeError) {
+        return NextResponse.json(
+          { error: "Failed to delete avatar files.", detail: removeError.message },
+          { status: 500 }
+        );
+      }
+    }
+
     const { error } = await adminClient.auth.admin.deleteUser(user.id);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      const message = error.message.toLowerCase();
+      if (message.includes("user not found") || message.includes("not found")) {
+        return NextResponse.json({ success: true });
+      }
+      return NextResponse.json(
+        { error: "Failed to delete user.", detail: error.message },
+        { status: 500 }
+      );
+    }
+
+    if (payload && (payload.reason || payload.details)) {
+      console.info("Account deletion feedback", {
+        userId: user.id,
+        reason: payload.reason ?? null,
+        details: payload.details ?? null,
+      });
     }
 
     return NextResponse.json({ success: true });

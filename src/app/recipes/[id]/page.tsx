@@ -1,16 +1,12 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { RecipeCard } from "@/components/RecipeCard";
 import type { Recipe } from "@/types/recipe";
-
-type SavedRecipe = {
-  id: string;
-  payload: Recipe;
-  source_url: string | null;
-};
 
 export default function SavedRecipePage() {
   const params = useParams<{ id: string }>();
@@ -18,8 +14,14 @@ export default function SavedRecipePage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(null);
-  const [headerInitial, setHeaderInitial] = useState("P");
+  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("plated.avatar");
+  });
+  const [headerInitial, setHeaderInitial] = useState(() => {
+    if (typeof window === "undefined") return "P";
+    return localStorage.getItem("plated.initial") ?? "P";
+  });
   const [headerAvatarError, setHeaderAvatarError] = useState(false);
   const [chatMessages, setChatMessages] = useState<
     Array<{ role: "user" | "assistant"; content: string }>
@@ -103,13 +105,6 @@ export default function SavedRecipePage() {
   }, [baseSuggestions, chatMessages, recipe, usedPrompts]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cachedAvatar = localStorage.getItem("plated.avatar");
-      const cachedInitial = localStorage.getItem("plated.initial");
-      if (cachedAvatar) setHeaderAvatarUrl(cachedAvatar);
-      if (cachedInitial) setHeaderInitial(cachedInitial);
-    }
-
     const loadHeader = async () => {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user;

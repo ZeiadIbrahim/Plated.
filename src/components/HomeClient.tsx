@@ -14,7 +14,7 @@ const normalizeAvatarUrl = (value: unknown) => {
   return value;
 };
 
-export default function Home() {
+export default function HomeClient() {
   const [url, setUrl] = useState("");
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -271,7 +271,7 @@ export default function Home() {
     const loadSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-        setIsSignedIn(!!data.session);
+      setIsSignedIn(!!data.session);
       setAuthUserEmail(data.session?.user.email ?? null);
       setAuthChecking(false);
       if (data.session) {
@@ -1241,262 +1241,262 @@ export default function Home() {
             {authMode === "sign-up" && (
               <>
                 <form className="mt-6 grid gap-4" onSubmit={handleSignUp}>
-                <button
-                  type="button"
-                  onClick={handleGoogleAuth}
-                  className="inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
-                >
-                  <svg
-                    aria-hidden="true"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 48 48"
+                  <button
+                    type="button"
+                    onClick={handleGoogleAuth}
+                    className="inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
                   >
-                    <path
-                      fill="#FFC107"
-                      d="M43.6 20.4H42V20H24v8h11.3C33.4 32.5 29 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.6z"
-                    />
-                    <path
-                      fill="#FF3D00"
-                      d="M6.3 14.7l6.6 4.8C14.7 16.2 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34 6.1 29.3 4 24 4 16.1 4 9.3 8.5 6.3 14.7z"
-                    />
-                    <path
-                      fill="#4CAF50"
-                      d="M24 44c5.1 0 9.8-1.9 13.3-5.1l-6.1-5.1C29 35.5 26.6 36 24 36c-5 0-9.3-3.2-10.9-7.6l-6.5 5C9.5 39.6 16.2 44 24 44z"
-                    />
-                    <path
-                      fill="#1976D2"
-                      d="M43.6 20.4H42V20H24v8h11.3c-1 2.9-3.3 5.2-6.3 6.9l6.1 5.1C39 37.2 44 31.6 44 24c0-1.3-.1-2.7-.4-3.6z"
-                    />
-                  </svg>
-                  Continue with Google
-                </button>
-                <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-[#111111]/50">
-                  <span className="h-px flex-1 bg-black/10" />
-                  or
-                  <span className="h-px flex-1 bg-black/10" />
-                </div>
-                <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                  Full name
-                  <input
-                    id="signup-fullname"
-                    name="signupFullName"
-                    type="text"
-                    required
-                    placeholder="Your name"
-                    value={fullName}
-                    onChange={(event) => setFullName(event.target.value)}
-                    className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
-                  />
-                </label>
-                <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                  Email
-                  <input
-                    id="signup-email"
-                    name="signupEmail"
-                    type="email"
-                    required
-                    placeholder="you@example.com"
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                    className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
-                  />
-                </label>
-                <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                  Password
-                  <div className="relative">
-                    <input
-                      id="signup-password"
-                      name="signupPassword"
-                      type={showPassword ? "text" : "password"}
-                      required
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
-                        showPassword ? "animate-eye-toggle" : ""
-                      }`}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    <svg
+                      aria-hidden="true"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 48 48"
                     >
-                      {showPassword ? (
-                        <svg
-                          aria-hidden="true"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
-                          <circle cx="12" cy="12" r="3.5" />
-                        </svg>
-                      ) : (
-                        <svg
-                          aria-hidden="true"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M3 12s3.5-6 9-6c2.1 0 3.9.6 5.3 1.4" />
-                          <path d="M21 12s-3.5 6-9 6c-2.1 0-3.9-.6-5.3-1.4" />
-                          <path d="M4 4l16 16" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-[#111111]/60">
-                    <span>Password strength</span>
-                    <span className="text-[#111111]">{strengthLabel}</span>
-                  </div>
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-black/10">
-                    <div
-                      className={`h-1.5 rounded-full transition-all duration-300 ${strengthColor}`}
-                      style={{ width: `${strengthWidth}%` }}
-                    />
-                  </div>
-                </label>
-                <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                  Confirm password
-                  <div className="relative">
-                    <input
-                      id="signup-confirm"
-                      name="signupConfirm"
-                      type={showConfirmPassword ? "text" : "password"}
-                      required
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((prev) => !prev)}
-                      className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
-                        showConfirmPassword ? "animate-eye-toggle" : ""
-                      }`}
-                      aria-label={
-                        showConfirmPassword
-                          ? "Hide password"
-                          : "Show password"
-                      }
-                    >
-                      {showConfirmPassword ? (
-                        <svg
-                          aria-hidden="true"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
-                          <circle cx="12" cy="12" r="3.5" />
-                        </svg>
-                      ) : (
-                        <svg
-                          aria-hidden="true"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M3 12s3.5-6 9-6c2.1 0 3.9.6 5.3 1.4" />
-                          <path d="M21 12s-3.5 6-9 6c-2.1 0-3.9-.6-5.3-1.4" />
-                          <path d="M4 4l16 16" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </label>
-                {authError && (
-                  <p className="text-sm text-[#D9534F]">{authError}</p>
-                )}
-                {authSuccess && (
-                  <p className="text-sm text-[#111111]/70 animate-success-pulse">
-                    {authSuccess}
-                  </p>
-                )}
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="mt-2 cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
-                >
-                  {authLoading ? "Creating account…" : "Create account"}
-                </button>
-              </form>
-
-              {showVerify && (
-                <form className="mt-5 grid gap-4" onSubmit={handleVerifyCode}>
-                  <div className="rounded-2xl border border-black/10 bg-black/5 p-4 text-sm text-[#111111]/70">
-                    We sent a 6-digit code to {verifyEmail ?? authEmail ?? "your email"}.
+                      <path
+                        fill="#FFC107"
+                        d="M43.6 20.4H42V20H24v8h11.3C33.4 32.5 29 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.6z"
+                      />
+                      <path
+                        fill="#FF3D00"
+                        d="M6.3 14.7l6.6 4.8C14.7 16.2 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34 6.1 29.3 4 24 4 16.1 4 9.3 8.5 6.3 14.7z"
+                      />
+                      <path
+                        fill="#4CAF50"
+                        d="M24 44c5.1 0 9.8-1.9 13.3-5.1l-6.1-5.1C29 35.5 26.6 36 24 36c-5 0-9.3-3.2-10.9-7.6l-6.5 5C9.5 39.6 16.2 44 24 44z"
+                      />
+                      <path
+                        fill="#1976D2"
+                        d="M43.6 20.4H42V20H24v8h11.3c-1 2.9-3.3 5.2-6.3 6.9l6.1 5.1C39 37.2 44 31.6 44 24c0-1.3-.1-2.7-.4-3.6z"
+                      />
+                    </svg>
+                    Continue with Google
+                  </button>
+                  <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-[#111111]/50">
+                    <span className="h-px flex-1 bg-black/10" />
+                    or
+                    <span className="h-px flex-1 bg-black/10" />
                   </div>
                   <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                    Verification code
+                    Full name
                     <input
-                      id="signup-verify"
-                      name="signupVerify"
+                      id="signup-fullname"
+                      name="signupFullName"
                       type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="123456"
-                      value={verifyCode}
-                      onChange={(event) => {
-                        const next = event.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 6);
-                        setVerifyCode(next);
-                      }}
+                      required
+                      placeholder="Your name"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
                       className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
                     />
                   </label>
-                  {verifyError && (
-                    <p className="text-sm text-[#D9534F]">{verifyError}</p>
+                  <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                    Email
+                    <input
+                      id="signup-email"
+                      name="signupEmail"
+                      type="email"
+                      required
+                      placeholder="you@example.com"
+                      value={authEmail}
+                      onChange={(event) => setAuthEmail(event.target.value)}
+                      className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                    Password
+                    <div className="relative">
+                      <input
+                        id="signup-password"
+                        name="signupPassword"
+                        type={showPassword ? "text" : "password"}
+                        required
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
+                          showPassword ? "animate-eye-toggle" : ""
+                        }`}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <svg
+                            aria-hidden="true"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+                            <circle cx="12" cy="12" r="3.5" />
+                          </svg>
+                        ) : (
+                          <svg
+                            aria-hidden="true"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 12s3.5-6 9-6c2.1 0 3.9.6 5.3 1.4" />
+                            <path d="M21 12s-3.5 6-9 6c-2.1 0-3.9-.6-5.3-1.4" />
+                            <path d="M4 4l16 16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-[#111111]/60">
+                      <span>Password strength</span>
+                      <span className="text-[#111111]">{strengthLabel}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-black/10">
+                      <div
+                        className={`h-1.5 rounded-full transition-all duration-300 ${strengthColor}`}
+                        style={{ width: `${strengthWidth}%` }}
+                      />
+                    </div>
+                  </label>
+                  <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                    Confirm password
+                    <div className="relative">
+                      <input
+                        id="signup-confirm"
+                        name="signupConfirm"
+                        type={showConfirmPassword ? "text" : "password"}
+                        required
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
+                          showConfirmPassword ? "animate-eye-toggle" : ""
+                        }`}
+                        aria-label={
+                          showConfirmPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
+                      >
+                        {showConfirmPassword ? (
+                          <svg
+                            aria-hidden="true"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+                            <circle cx="12" cy="12" r="3.5" />
+                          </svg>
+                        ) : (
+                          <svg
+                            aria-hidden="true"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 12s3.5-6 9-6c2.1 0 3.9.6 5.3 1.4" />
+                            <path d="M21 12s-3.5 6-9 6c-2.1 0-3.9-.6-5.3-1.4" />
+                            <path d="M4 4l16 16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </label>
+                  {authError && (
+                    <p className="text-sm text-[#D9534F]">{authError}</p>
                   )}
-                  {verifySuccess && (
+                  {authSuccess && (
                     <p className="text-sm text-[#111111]/70 animate-success-pulse">
-                      {verifySuccess}
+                      {authSuccess}
                     </p>
                   )}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={verifyLoading || verifyCode.length !== 6}
-                      className="cursor-pointer rounded-full bg-[#111111] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
-                    >
-                      {verifyLoading ? "Verifying…" : "Verify email"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleResendCode}
-                      disabled={verifyLoading}
-                      className="cursor-pointer rounded-full border border-black/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 disabled:opacity-60"
-                    >
-                      Resend code
-                    </button>
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="mt-2 cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                  >
+                    {authLoading ? "Creating account…" : "Create account"}
+                  </button>
                 </form>
-              )}
-            </>
+
+                {showVerify && (
+                  <form className="mt-5 grid gap-4" onSubmit={handleVerifyCode}>
+                    <div className="rounded-2xl border border-black/10 bg-black/5 p-4 text-sm text-[#111111]/70">
+                      We sent a 6-digit code to {verifyEmail ?? authEmail ?? "your email"}.
+                    </div>
+                    <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                      Verification code
+                      <input
+                        id="signup-verify"
+                        name="signupVerify"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        value={verifyCode}
+                        onChange={(event) => {
+                          const next = event.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 6);
+                          setVerifyCode(next);
+                        }}
+                        className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
+                      />
+                    </label>
+                    {verifyError && (
+                      <p className="text-sm text-[#D9534F]">{verifyError}</p>
+                    )}
+                    {verifySuccess && (
+                      <p className="text-sm text-[#111111]/70 animate-success-pulse">
+                        {verifySuccess}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="submit"
+                        disabled={verifyLoading || verifyCode.length !== 6}
+                        className="cursor-pointer rounded-full bg-[#111111] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                      >
+                        {verifyLoading ? "Verifying…" : "Verify email"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResendCode}
+                        disabled={verifyLoading}
+                        className="cursor-pointer rounded-full border border-black/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 disabled:opacity-60"
+                      >
+                        Resend code
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1537,8 +1537,8 @@ export default function Home() {
                       className="h-full w-full object-cover"
                       referrerPolicy="no-referrer"
                       onError={() => {
-                            setProfileAvatarPreview("");
-                            setProfileAvatarUrl("");
+                        setProfileAvatarPreview("");
+                        setProfileAvatarUrl("");
                       }}
                     />
                   ) : (
@@ -1612,7 +1612,6 @@ export default function Home() {
                   className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
                 />
               </label>
-
 
               {profileError && (
                 <p className="text-sm text-[#D9534F]">{profileError}</p>

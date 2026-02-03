@@ -1,23 +1,24 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function PrivacyPage() {
   const router = useRouter();
-  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(null);
-  const [headerInitial, setHeaderInitial] = useState("P");
+  const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("plated.avatar");
+  });
+  const [headerInitial, setHeaderInitial] = useState(() => {
+    if (typeof window === "undefined") return "P";
+    return localStorage.getItem("plated.initial") ?? "P";
+  });
   const [headerAvatarError, setHeaderAvatarError] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cachedAvatar = localStorage.getItem("plated.avatar");
-      const cachedInitial = localStorage.getItem("plated.initial");
-      if (cachedAvatar) setHeaderAvatarUrl(cachedAvatar);
-      if (cachedInitial) setHeaderInitial(cachedInitial);
-    }
-
     const loadHeader = async () => {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user;

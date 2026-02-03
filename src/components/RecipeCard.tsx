@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useMemo, useState } from "react";
 import { useRecipeMath } from "@/hooks/useRecipeMath";
 import type { Recipe } from "@/types/recipe";
@@ -221,7 +223,7 @@ export const RecipeCard = ({
       },
       {}
     );
-  }, [computed.ingredients]);
+  }, [computed]);
 
   return (
     <section className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6 sm:py-16">

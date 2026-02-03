@@ -5,16 +5,17 @@ import { useEffect, useState } from "react";
 const THEME_KEY = "plated.theme";
 
 export const ThemeToggle = () => {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const stored = localStorage.getItem(THEME_KEY);
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return stored ? stored === "dark" : prefersDark;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const stored = localStorage.getItem(THEME_KEY);
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const next = stored ? stored === "dark" : prefersDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("theme-dark", next);
-  }, []);
+    document.documentElement.classList.toggle("theme-dark", isDark);
+  }, [isDark]);
 
   const handleToggle = () => {
     const next = !isDark;
