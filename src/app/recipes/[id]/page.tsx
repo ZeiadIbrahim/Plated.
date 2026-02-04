@@ -25,10 +25,12 @@ export default function SavedRecipePage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [usedPrompts, setUsedPrompts] = useState<string[]>([]);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const baseSuggestions = useMemo(() => {
     if (!recipe) return [] as string[];
+    const titleShort = recipe.title.split(" ").slice(0, 5).join(" ");
     const ingredientText = recipe.ingredients
       .map((item) => item.item)
       .join(" ")
@@ -57,6 +59,10 @@ export default function SavedRecipePage() {
     }
     if (/\b(bake|roast)\b/.test(instructionsText)) {
       suggestions.push("Any tips for a crispier finish?");
+    }
+
+    if (titleShort) {
+      suggestions.unshift(`Best side for ${titleShort}?`);
     }
 
     const evergreen = [
@@ -96,7 +102,7 @@ export default function SavedRecipePage() {
       new Set([...contextual, ...baseSuggestions])
     ).filter((prompt) => !usedPrompts.includes(prompt));
 
-    return unique.slice(0, 4);
+    return unique.slice(0, 2);
   }, [baseSuggestions, chatMessages, recipe, usedPrompts]);
 
   useEffect(() => {
@@ -195,6 +201,7 @@ export default function SavedRecipePage() {
       setChatInput("");
       setChatError(null);
       setChatOpen(false);
+      setShowSuggestions(false);
       setUsedPrompts([]);
     };
 
@@ -323,6 +330,9 @@ export default function SavedRecipePage() {
         <>
           <RecipeCard recipe={recipe} showSave={false} sourceUrl={sourceUrl} />
           <section className="mx-auto w-full max-w-2xl px-4 pb-12 pt-6 sm:px-6">
+            <h2 className="mb-4 text-lg font-semibold text-[#111111] sm:text-xl">
+              Ask about this recipe
+            </h2>
             <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/70 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
@@ -333,45 +343,31 @@ export default function SavedRecipePage() {
                     : "bg-white/80 hover:bg-black/5"
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white shadow-[0_12px_30px_-20px_rgba(0,0,0,0.5)]">
-                    <svg
-                      aria-hidden="true"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-[#111111]/70"
-                    >
-                      <path d="M12 2v2" />
-                      <path d="M12 20v2" />
-                      <path d="M4.9 4.9l1.4 1.4" />
-                      <path d="M17.7 17.7l1.4 1.4" />
-                      <path d="M2 12h2" />
-                      <path d="M20 12h2" />
-                      <path d="M4.9 19.1l1.4-1.4" />
-                      <path d="M17.7 6.3l1.4-1.4" />
-                      <circle cx="12" cy="12" r="4" />
-                    </svg>
-                  </div>
-                  <div>
+                <div>
                     <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
-                      Plated Assist
+                      Plated. AI Assist
                     </p>
-                    <h2 className="text-lg text-[#111111]">
-                      Ask about this recipe
-                    </h2>
                     <p className="text-sm text-[#111111]/70">
-                      Substitutions, timing, and ingredient swaps—instantly.
+                      Substitutions, timing, and ingredient swaps - instantly.
                     </p>
-                  </div>
                 </div>
-                <span className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                  {chatOpen ? "Close" : "Open"}
+                <span className="text-[#111111]/60">
+                  <svg
+                    aria-hidden="true"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`transition-transform duration-500 ${
+                      chatOpen ? "rotate-180" : "animate-bounce"
+                    }`}
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
                 </span>
               </button>
 
@@ -383,7 +379,7 @@ export default function SavedRecipePage() {
                 <div className="overflow-hidden px-6 pb-6">
                   <div
                     ref={chatScrollRef}
-                    className="flex max-h-80 flex-col gap-4 overflow-y-auto rounded-2xl border border-black/10 bg-white/60 p-4"
+                    className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto rounded-2xl bg-white/60 p-4 sm:max-h-96"
                   >
                     {chatMessages.map((message, index) => (
                       <div
@@ -422,20 +418,31 @@ export default function SavedRecipePage() {
                     <p className="mt-3 text-sm text-[#D9534F]">{chatError}</p>
                   ) : null}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {chatSuggestions.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => {
-                          if (chatLoading) return;
-                          handleChatSubmit(suggestion);
-                        }}
-                        className="rounded-full border border-black/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                  <div className="mt-4 grid gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSuggestions((prev) => !prev)}
+                      className="self-start rounded-full border border-black/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                    >
+                      {showSuggestions ? "Hide prompts" : "Show prompts"}
+                    </button>
+                    {showSuggestions && (
+                      <div className="grid gap-2">
+                        {chatSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => {
+                              if (chatLoading) return;
+                              handleChatSubmit(suggestion);
+                            }}
+                            className="w-full rounded-full border border-black/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row">

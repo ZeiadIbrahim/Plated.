@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as cheerio from "cheerio";
+import type { CheerioAPI } from "cheerio";
 
 export const runtime = "nodejs";
 
 const SYSTEM_PROMPT =
   "Extract the recipe from this text. Return ONLY valid JSON in this format: { title, original_servings (number), rating: { value (number|null), count (number|null) }, allergens: [string], tips: [string], ingredients: [{ group, item, amount (number), unit, optional (boolean) }], instructions: [string] }. Use group as the section heading (e.g., 'Toppings', 'Sauce'); default to 'Ingredients' if none. If a unit is missing, make it null. If an ingredient is optional, set optional to true. Convert fractions to decimals. For allergens, only include relevant items from this list: gluten, dairy, nuts, peanuts, soy, eggs, fish, shellfish, sesame, mustard, celery, sulfites, lupin, mollusks. For rating, infer from page if present; otherwise null. For tips, extract practical tips or tricks from the text (max 5).";
 
-const cleanText = (html: string) => {
-  const $ = cheerio.load(html);
-  $("script, style, noscript").remove();
-  const text = $("body").text();
+const cleanText = ($: CheerioAPI) => {
+  const $root = $.root().clone();
+  $root.find("script, style, noscript").remove();
+  const text = $root.find("body").text();
   return text.replace(/\s+/g, " ").trim();
 };
 
@@ -32,8 +33,7 @@ const resolveImageUrl = (value: string, pageUrl: string) => {
   }
 };
 
-const extractRecipeImage = (html: string, pageUrl: string) => {
-  const $ = cheerio.load(html);
+const extractRecipeImage = ($: CheerioAPI, pageUrl: string) => {
   const metaSelectors = [
     "meta[property='og:image']",
     "meta[property='og:image:url']",
@@ -103,8 +103,7 @@ const extractRecipeImage = (html: string, pageUrl: string) => {
   return imageFromSchema || "";
 };
 
-const isRecipeStructuredData = (html: string) => {
-  const $ = cheerio.load(html);
+const isRecipeStructuredData = ($: CheerioAPI) => {
   let found = false;
 
   $("script[type='application/ld+json']").each((_, element) => {
@@ -153,9 +152,8 @@ const isRecipeStructuredData = (html: string) => {
 };
 
 const extractRecipeStructuredData = (
-  html: string
+  $: CheerioAPI
 ): Record<string, unknown> | null => {
-  const $ = cheerio.load(html);
   let recipeData: Record<string, unknown> | null = null;
 
   $("script[type='application/ld+json']").each((_, element) => {
@@ -338,6 +336,29 @@ const normalizeTips = (value: unknown) => {
     .slice(0, 5);
 };
 
+const normalizeAuthor = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const normalized = normalizeAuthor(item);
+      if (normalized) return normalized;
+    }
+    return null;
+  }
+  if (typeof value === "object") {
+    const name = (value as Record<string, unknown>).name;
+    if (typeof name === "string") {
+      const trimmed = name.trim();
+      return trimmed ? trimmed : null;
+    }
+  }
+  return null;
+};
+
 const normalizeRating = (value: unknown) => {
   if (!value || typeof value !== "object") {
     return { value: null, count: null };
@@ -409,10 +430,11 @@ export async function POST(request: Request) {
     }
 
     const html = await response.text();
-    const cleaned = cleanText(html);
-    const imageUrl = extractRecipeImage(html, url);
+    const $ = cheerio.load(html);
+    const cleaned = cleanText($);
+    const imageUrl = extractRecipeImage($, url);
 
-    const hasStructuredRecipe = isRecipeStructuredData(html);
+    const hasStructuredRecipe = isRecipeStructuredData($);
     const hasRecipeText = looksLikeRecipeText(cleaned);
     if (!hasStructuredRecipe && !hasRecipeText) {
       return NextResponse.json(
@@ -431,9 +453,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const structured = extractRecipeStructuredData(html);
-    let structuredRecipe: {
+    const structured = extractRecipeStructuredData($);
+    type ParsedRecipe = {
       title: string;
+      author: string | null;
       original_servings: number;
       image_url: string | null;
       rating: { value: number | null; count: number | null };
@@ -441,7 +464,9 @@ export async function POST(request: Request) {
       tips: string[];
       ingredients: ReturnType<typeof normalizeIngredient>[];
       instructions: string[];
-    } | null = null;
+    };
+
+    let structuredRecipe: ParsedRecipe | null = null;
     let needsEnrichment = false;
 
     if (structured) {
@@ -462,8 +487,9 @@ export async function POST(request: Request) {
       const structuredInstructions = normalizeSchemaInstructions(instructionsRaw);
 
       if (structuredIngredients.length && structuredInstructions.length) {
-        const normalized = {
+        const normalized: ParsedRecipe = {
           title: typeof title === "string" ? title : "Untitled Recipe",
+          author: normalizeAuthor(structured["author"]),
           original_servings:
             typeof servings === "number" && Number.isFinite(servings)
               ? servings
@@ -550,6 +576,7 @@ export async function POST(request: Request) {
 
     const json = extractJson(text) as {
       title?: string;
+      author?: string;
       original_servings?: number;
       rating?: { value?: number | null; count?: number | null } | null;
       allergens?: string[];
@@ -564,8 +591,9 @@ export async function POST(request: Request) {
       instructions?: string[];
     };
 
-    const normalized = {
+    const normalized: ParsedRecipe = {
       title: json.title ?? "Untitled Recipe",
+      author: json.author ?? null,
       original_servings: Number.isFinite(json.original_servings)
         ? Number(json.original_servings)
         : 1,
@@ -598,6 +626,7 @@ export async function POST(request: Request) {
           normalized.rating.value !== null || normalized.rating.count !== null
             ? normalized.rating
             : structuredRecipe.rating,
+        author: normalized.author || structuredRecipe.author || null,
       };
       return NextResponse.json(merged, { status: 200 });
     }

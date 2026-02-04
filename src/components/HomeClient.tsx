@@ -31,7 +31,9 @@ export default function HomeClient() {
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [verifyCode, setVerifyCode] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(""));
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
@@ -67,10 +69,12 @@ export default function HomeClient() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [usedPrompts, setUsedPrompts] = useState<string[]>([]);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const baseSuggestions = useMemo(() => {
     if (!recipe) return [] as string[];
+    const titleShort = recipe.title.split(" ").slice(0, 5).join(" ");
     const ingredientText = recipe.ingredients
       .map((item) => item.item)
       .join(" ")
@@ -99,6 +103,10 @@ export default function HomeClient() {
     }
     if (/\b(bake|roast)\b/.test(instructionsText)) {
       suggestions.push("Any tips for a crispier finish?");
+    }
+
+    if (titleShort) {
+      suggestions.unshift(`Best side for ${titleShort}?`);
     }
 
     const evergreen = [
@@ -138,7 +146,7 @@ export default function HomeClient() {
       new Set([...contextual, ...baseSuggestions])
     ).filter((prompt) => !usedPrompts.includes(prompt));
 
-    return unique.slice(0, 4);
+    return unique.slice(0, 2);
   }, [baseSuggestions, chatMessages, recipe, usedPrompts]);
 
   const persistHeaderIdentity = (avatar: string | null, initial: string) => {
@@ -175,6 +183,7 @@ export default function HomeClient() {
     setChatInput("");
     setChatError(null);
     setChatOpen(false);
+    setShowSuggestions(false);
     setUsedPrompts([]);
   }, [recipe]);
 
@@ -219,7 +228,9 @@ export default function HomeClient() {
     setVerifyError(null);
     setVerifySuccess(null);
     setVerifyCode("");
+    setOtpDigits(Array(6).fill(""));
     setShowVerify(false);
+    setShowVerifyModal(false);
     setVerifyEmail(null);
   };
 
@@ -527,8 +538,11 @@ export default function HomeClient() {
       if (message.includes("already registered") || message.includes("already exists")) {
         setVerifyEmail(authEmail);
         setShowVerify(true);
+        setShowVerifyModal(true);
+        setOtpDigits(Array(6).fill(""));
         setVerifyCode("");
         setAuthSuccess("We found a pending signup. Enter the 6-digit code or resend it.");
+        setShowAuth(false);
       } else {
         setAuthError(error.message);
       }
@@ -543,8 +557,11 @@ export default function HomeClient() {
 
     setVerifyEmail(authEmail);
     setShowVerify(true);
+    setShowVerifyModal(true);
+    setOtpDigits(Array(6).fill(""));
     setVerifyCode("");
     setAuthSuccess("Account created. Check your email for the 6-digit code.");
+    setShowAuth(false);
     setAuthLoading(false);
   };
 
@@ -558,7 +575,8 @@ export default function HomeClient() {
       setVerifyError("Please enter the email you signed up with.");
       return;
     }
-    if (verifyCode.length !== 6) {
+    const code = otpDigits.join("") || verifyCode;
+    if (code.length !== 6) {
       setVerifyError("Enter the 6-digit code from your email.");
       return;
     }
@@ -566,7 +584,7 @@ export default function HomeClient() {
     setVerifyLoading(true);
     const { error } = await supabase.auth.verifyOtp({
       email,
-      token: verifyCode,
+      token: code,
       type: "signup",
     });
 
@@ -579,7 +597,10 @@ export default function HomeClient() {
     setIsSignedIn(true);
     setVerifySuccess("Email verified. You're signed in.");
     setAuthSuccess("Email verified. You're signed in.");
-    setTimeout(() => setShowAuth(false), 1200);
+    setTimeout(() => {
+      setShowAuth(false);
+      setShowVerifyModal(false);
+    }, 1200);
     setVerifyLoading(false);
   };
 
@@ -887,10 +908,10 @@ export default function HomeClient() {
               {isLoading ? (
                 <>
                   <span className="h-4 w-4 rounded-full border border-white/40 border-t-white animate-spin-slow" />
-                  Parsing…
+                  Fetching…
                 </>
               ) : (
-                "Parse Recipe"
+                "Fetch Recipe"
               )}
             </button>
             {error && <p className="text-sm text-[#D9534F]">{error}</p>}
@@ -901,6 +922,9 @@ export default function HomeClient() {
       {recipe && (
         <>
           <section className="mx-auto w-full max-w-2xl px-4 pb-8 sm:px-6">
+            <h2 className="mb-4 text-lg font-semibold text-[#111111] sm:text-xl">
+              Ask about this recipe
+            </h2>
             <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/70 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
@@ -911,45 +935,31 @@ export default function HomeClient() {
                     : "bg-white/80 hover:bg-black/5"
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white shadow-[0_12px_30px_-20px_rgba(0,0,0,0.5)]">
-                    <svg
-                      aria-hidden="true"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-[#111111]/70"
-                    >
-                      <path d="M12 2v2" />
-                      <path d="M12 20v2" />
-                      <path d="M4.9 4.9l1.4 1.4" />
-                      <path d="M17.7 17.7l1.4 1.4" />
-                      <path d="M2 12h2" />
-                      <path d="M20 12h2" />
-                      <path d="M4.9 19.1l1.4-1.4" />
-                      <path d="M17.7 6.3l1.4-1.4" />
-                      <circle cx="12" cy="12" r="4" />
-                    </svg>
-                  </div>
-                  <div>
+                <div>
                     <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
-                      Plated Assist
+                      Plated. AI Assist
                     </p>
-                    <h2 className="text-lg text-[#111111]">
-                      Ask about this recipe
-                    </h2>
                     <p className="text-sm text-[#111111]/70">
-                      Substitutions, timing, and ingredient swaps—instantly.
+                      Substitutions, timing, and ingredient swaps - instantly.
                     </p>
-                  </div>
                 </div>
-                <span className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                  {chatOpen ? "Close" : "Open"}
+                <span className="text-[#111111]/60">
+                  <svg
+                    aria-hidden="true"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`transition-transform duration-500 ${
+                      chatOpen ? "rotate-180" : "animate-bounce"
+                    }`}
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
                 </span>
               </button>
 
@@ -961,7 +971,7 @@ export default function HomeClient() {
                 <div className="overflow-hidden px-6 pb-6">
                   <div
                     ref={chatScrollRef}
-                    className="flex max-h-80 flex-col gap-4 overflow-y-auto rounded-2xl border border-black/10 bg-white/60 p-4"
+                    className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto rounded-2xl bg-white/60 p-4 sm:max-h-96"
                   >
                     {chatMessages.map((message, index) => (
                       <div
@@ -1000,20 +1010,31 @@ export default function HomeClient() {
                     <p className="mt-3 text-sm text-[#D9534F]">{chatError}</p>
                   ) : null}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {chatSuggestions.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => {
-                          if (chatLoading) return;
-                          handleChatSubmit(suggestion);
-                        }}
-                        className="rounded-full border border-black/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                  <div className="mt-4 grid gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSuggestions((prev) => !prev)}
+                      className="self-start rounded-full border border-black/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                    >
+                      {showSuggestions ? "Hide prompts" : "Show prompts"}
+                    </button>
+                    {showSuggestions && (
+                      <div className="grid gap-2">
+                        {chatSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => {
+                              if (chatLoading) return;
+                              handleChatSubmit(suggestion);
+                            }}
+                            className="w-full rounded-full border border-black/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -1058,8 +1079,8 @@ export default function HomeClient() {
       )}
 
       {showAuth && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-black/10 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
+        <div className="fixed inset-0 z-30 flex items-start justify-center bg-black/40 px-4 py-6 sm:items-center">
+          <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-black/10 bg-white p-5 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in sm:p-6">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
@@ -1444,58 +1465,6 @@ export default function HomeClient() {
                     {authLoading ? "Creating account…" : "Create account"}
                   </button>
                 </form>
-
-                {showVerify && (
-                  <form className="mt-5 grid gap-4" onSubmit={handleVerifyCode}>
-                    <div className="rounded-2xl border border-black/10 bg-black/5 p-4 text-sm text-[#111111]/70">
-                      We sent a 6-digit code to {verifyEmail ?? authEmail ?? "your email"}.
-                    </div>
-                    <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-                      Verification code
-                      <input
-                        id="signup-verify"
-                        name="signupVerify"
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        placeholder="123456"
-                        value={verifyCode}
-                        onChange={(event) => {
-                          const next = event.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 6);
-                          setVerifyCode(next);
-                        }}
-                        className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
-                      />
-                    </label>
-                    {verifyError && (
-                      <p className="text-sm text-[#D9534F]">{verifyError}</p>
-                    )}
-                    {verifySuccess && (
-                      <p className="text-sm text-[#111111]/70 animate-success-pulse">
-                        {verifySuccess}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="submit"
-                        disabled={verifyLoading || verifyCode.length !== 6}
-                        className="cursor-pointer rounded-full bg-[#111111] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
-                      >
-                        {verifyLoading ? "Verifying…" : "Verify email"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleResendCode}
-                        disabled={verifyLoading}
-                        className="cursor-pointer rounded-full border border-black/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 disabled:opacity-60"
-                      >
-                        Resend code
-                      </button>
-                    </div>
-                  </form>
-                )}
               </>
             )}
           </div>
@@ -1504,7 +1473,7 @@ export default function HomeClient() {
 
       {showProfile && isSignedIn && (
         <div className="fixed inset-0 z-30 flex items-start justify-center bg-black/40 px-4 py-6 sm:items-center">
-          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl border border-black/10 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in">
+          <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-black/10 bg-white p-5 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in sm:p-6">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
@@ -1762,6 +1731,112 @@ export default function HomeClient() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showVerifyModal && showVerify && (
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 px-4 py-6 sm:items-center">
+          <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-black/10 bg-white p-5 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] animate-modal-in sm:p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
+                  Verify your email
+                </p>
+                <h2 className="text-2xl text-[#111111]">Enter the 6-digit code</h2>
+                <p className="text-sm text-[#111111]/70">
+                  We sent a code to {verifyEmail ?? authEmail ?? "your email"}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVerifyModal(false)}
+                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+              >
+                Close
+              </button>
+            </div>
+
+            <form
+              className="mt-6 grid gap-5"
+              onSubmit={handleVerifyCode}
+            >
+              <div className="grid gap-2">
+                <label className="text-[11px] uppercase tracking-[0.3em] text-[#111111]/50">
+                  Verification code
+                </label>
+                <div className="flex items-center justify-between gap-2">
+                  {otpDigits.map((digit, index) => (
+                    <input
+                      key={`otp-${index}`}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete={index === 0 ? "one-time-code" : "off"}
+                      value={digit}
+                      onChange={(event) => {
+                        const value = event.target.value.replace(/\D/g, "");
+                        const next = value.slice(-1);
+                        setOtpDigits((prev) => {
+                          const updated = [...prev];
+                          updated[index] = next;
+                          return updated;
+                        });
+                        if (next && event.currentTarget.nextElementSibling instanceof HTMLInputElement) {
+                          event.currentTarget.nextElementSibling.focus();
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Backspace" && !otpDigits[index]) {
+                          const prev = event.currentTarget.previousElementSibling;
+                          if (prev instanceof HTMLInputElement) {
+                            prev.focus();
+                          }
+                        }
+                      }}
+                      placeholder="•"
+                      className="h-12 w-10 rounded-2xl border border-black/10 bg-white text-center text-lg font-semibold text-[#111111] shadow-[0_10px_20px_-18px_rgba(0,0,0,0.45)] outline-none transition-all duration-300 focus:-translate-y-0.5 focus:border-black/40 focus:shadow-[0_12px_30px_-20px_rgba(0,0,0,0.6)]"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {verifyError && (
+                <p className="text-sm text-[#D9534F]">{verifyError}</p>
+              )}
+              {verifySuccess && (
+                <p className="text-sm text-[#111111]/70 animate-success-pulse">
+                  {verifySuccess}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={verifyLoading || otpDigits.join("").length !== 6}
+                  className="cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                >
+                  {verifyLoading ? "Verifying…" : "Verify email"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={verifyLoading}
+                  className="cursor-pointer rounded-full border border-black/10 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 disabled:opacity-60"
+                >
+                  Resend code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVerifyModal(false);
+                    setShowAuth(true);
+                  }}
+                  className="text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-colors duration-300 hover:text-[#111111]"
+                >
+                  Edit email
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -156,6 +156,7 @@ button:disabled {
   animation: modal-in 260ms ease-out both;
 }
 
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition-duration: 0ms !important;

@@ -205,7 +205,21 @@ export const RecipeCard = ({
 }: RecipeCardProps) => {
   const [servings, setServings] = useState(recipe.original_servings);
   const [isMetric, setIsMetric] = useState(false);
+  const [openAllergen, setOpenAllergen] = useState<string | null>(null);
   const computed = useRecipeMath(recipe, servings, isMetric);
+
+  const formattedAuthor = useMemo(() => {
+    if (!recipe.author) return null;
+    const parts = recipe.author
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (!parts.length) return null;
+    if (parts.length === 1) return parts[0];
+    const first = parts[0];
+    const last = parts[parts.length - 1];
+    return `${first} ${last[0].toUpperCase()}.`;
+  }, [recipe.author]);
 
   const sliderRange = useMemo(() => {
     const min = Math.max(1, recipe.original_servings - 4);
@@ -258,8 +272,6 @@ export const RecipeCard = ({
           ) : null}
           <div className="flex flex-wrap items-center gap-3 text-sm text-[#111111]/70">
             <span>{servingsLabel(computed.servings)}</span>
-            <span>•</span>
-            <span>{isMetric ? "Metric" : "Imperial"}</span>
             {recipe.rating?.value ? (
               <>
                 <span>•</span>
@@ -272,6 +284,12 @@ export const RecipeCard = ({
                     </span>
                   ) : null}
                 </span>
+              </>
+            ) : null}
+            {formattedAuthor ? (
+              <>
+                <span>•</span>
+                <span className="text-[#111111]/70">By {formattedAuthor}</span>
               </>
             ) : null}
           </div>
@@ -296,16 +314,21 @@ export const RecipeCard = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-[#111111]/70">Units</span>
-              <button
-                type="button"
-                onClick={() => setIsMetric((prev) => !prev)}
-                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 hover:shadow-[0_8px_20px_-14px_rgba(17,17,17,0.6)] hover:ring-1 hover:ring-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/50"
-              >
-                {isMetric ? "Metric" : "Imperial"}
-              </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[#111111]/70">Units</span>
+                <button
+                  type="button"
+                  onClick={() => setIsMetric((prev) => !prev)}
+                  className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 hover:shadow-[0_8px_20px_-14px_rgba(17,17,17,0.6)] hover:ring-1 hover:ring-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/50"
+                >
+                  {isMetric ? "Metric" : "Imperial"}
+                </button>
+              </div>
+              <span className="text-xs text-[#111111]/50">
+                Tap to switch between Metric and Imperial.
+              </span>
             </div>
             {showSave ? (
               <button
@@ -343,43 +366,66 @@ export const RecipeCard = ({
                       return (
                         <li
                           key={`${ingredient.item}-${index}`}
-                          className="flex flex-wrap items-center gap-3"
+                          className="flex flex-col gap-1"
                         >
-                          <span className="min-w-30 font-semibold">
-                            {ingredient.displayAmount ?? ""}
-                            {ingredient.displayAmount && ingredient.displayUnit
-                              ? " "
-                              : ""}
-                            {ingredient.displayUnit ?? ""}
-                          </span>
-                          <span className="text-[#111111]/80">
-                            {ingredient.item}
-                          </span>
-                          {inferred.length > 0 && (
-                            <span className="flex flex-wrap gap-2">
-                              {inferred.map((allergen) => (
-                                <span
-                                  key={`${ingredient.item}-${allergen}`}
-                                  className="group relative inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 hover:text-[#111111]"
-                                >
-                                  <span aria-hidden="true" className="group-hover:scale-110">
-                                    {renderAllergenIcon(allergen)}
-                                  </span>
-                                  <span className="font-semibold">
-                                    {ALLERGEN_RULES[allergen]?.label ?? allergen[0]}
-                                  </span>
-                                  <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-max -translate-x-1/2 rounded-full border border-black/10 bg-white px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[#111111]/70 opacity-0 shadow-[0_12px_30px_-20px_rgba(0,0,0,0.4)] transition-all duration-200 group-hover:opacity-100">
-                                    Contains {allergen}
-                                  </span>
-                                </span>
-                              ))}
+                          <div className="flex items-center gap-3">
+                            <span className="w-24 shrink-0 font-semibold">
+                              {ingredient.displayAmount ?? ""}
+                              {ingredient.displayAmount && ingredient.displayUnit
+                                ? " "
+                                : ""}
+                              {ingredient.displayUnit ?? ""}
                             </span>
-                          )}
-                          {ingredient.optional ? (
-                            <span className="text-xs uppercase tracking-[0.2em] text-[#111111]/40">
-                              optional
+                            <span className="min-w-0 flex-1 text-[#111111]/80">
+                              {ingredient.item}
                             </span>
-                          ) : null}
+                            {inferred.length > 0 && (
+                              <span className="flex max-w-[40%] items-center gap-2 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                {inferred.map((allergen) => (
+                                  <button
+                                    type="button"
+                                    key={`${ingredient.item}-${allergen}`}
+                                    onClick={() =>
+                                      setOpenAllergen((prev) =>
+                                        prev === `${ingredient.item}-${allergen}`
+                                          ? null
+                                          : `${ingredient.item}-${allergen}`
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[#111111]/70 whitespace-nowrap transition-all duration-200 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 hover:text-[#111111]"
+                                    aria-pressed={
+                                      openAllergen ===
+                                      `${ingredient.item}-${allergen}`
+                                    }
+                                  >
+                                    <span aria-hidden="true">
+                                      {renderAllergenIcon(allergen)}
+                                    </span>
+                                    <span className="font-semibold">
+                                      {ALLERGEN_RULES[allergen]?.label ?? allergen[0]}
+                                    </span>
+                                  </button>
+                                ))}
+                              </span>
+                            )}
+                            {ingredient.optional ? (
+                              <span className="shrink-0 text-xs uppercase tracking-[0.2em] text-[#111111]/40 whitespace-nowrap">
+                                optional
+                              </span>
+                            ) : null}
+                          </div>
+                          {(() => {
+                            const activeAllergen = inferred.find(
+                              (allergen) =>
+                                openAllergen === `${ingredient.item}-${allergen}`
+                            );
+                            if (!activeAllergen) return null;
+                            return (
+                              <span className="text-[11px] uppercase tracking-[0.2em] text-[#111111]/60">
+                                Contains {activeAllergen}
+                              </span>
+                            );
+                          })()}
                         </li>
                       );
                     })}

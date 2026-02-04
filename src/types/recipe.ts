@@ -8,6 +8,7 @@ export type RecipeIngredient = {
 
 export type Recipe = {
   title: string;
+  author?: string | null;
   original_servings: number;
   image_url?: string | null;
   allergens?: string[];
