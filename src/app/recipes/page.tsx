@@ -41,6 +41,8 @@ const COLLECTION_COLORS = [
 ];
 const COLLECTION_COLOR_STORAGE_KEY = "plated.collectionColors";
 
+export const dynamic = "force-dynamic";
+
 export default function RecipesPage() {
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [loading, setLoading] = useState(true);
