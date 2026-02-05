@@ -35,7 +35,8 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const activeVariants: Partial<Record<ButtonVariant, string>> = {
-  chip: "border-transparent bg-[#111111] text-white hover:bg-black hover:ring-black/40",
+  // chip: "border-transparent bg-[#111111] text-white hover:bg-black hover:ring-black/40",
+  chip: "border-transparent bg-black/10 text-[#111111] hover:bg-black/20",
   secondary: "border-black/30 bg-white text-[#111111]",
 };
 
