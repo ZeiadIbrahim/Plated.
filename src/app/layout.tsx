@@ -19,11 +19,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: {
-    template: '%s | Plated', // This allows child pages to inject their own title
-    default: 'Plated - Your Personal Cookbook', // Default title for the home page
-  },
+  title: "Plated",
   description: "A high-end personal cookbook & recipe parser",
+  verification: {
+    google: "l-qcPTWUEfgv60y3GvC_PNzjIv2XVOPcy7K0k00s0Ws",
+  },
 };
 
 export default function RootLayout({
