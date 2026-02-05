@@ -8,6 +8,8 @@ import { RecipeCard } from "@/components/RecipeCard";
 import { Button } from "@/components/ui/Button";
 import type { Recipe } from "@/types/recipe";
 import { supabase } from "@/lib/supabaseClient";
+import Lottie from "lottie-react";
+import cookingAnimation from "@/../public/lottie/steampot.json";
 
 const normalizeAvatarUrl = (value: unknown) => {
   if (typeof value !== "string") return "";
@@ -1047,7 +1049,7 @@ export default function HomeClient() {
               Plated.
             </p>
             <h1 className="text-3xl leading-tight text-[#111111] sm:text-4xl">
-              Import a recipe URL.
+              Enter a recipe link below.
             </h1>
             <p className="text-sm text-[#111111]/70 sm:text-base">
               Paste a recipe link and let us extract ingredients and
@@ -1081,8 +1083,12 @@ export default function HomeClient() {
             >
               {isLoading ? (
                 <>
-                  <span className="h-4 w-4 rounded-full border border-white/40 border-t-white animate-spin-slow" />
                   Cooking…
+                  <Lottie animationData={cookingAnimation}
+                  loop
+                  autoplay
+                  style={{width: 22, height: 22, marginTop: -7}}
+                  />
                 </>
               ) : (
                 "Fetch Recipe"
@@ -1208,8 +1214,12 @@ export default function HomeClient() {
                 >
                   {discoveryLoading ? (
                     <span className="inline-flex items-center gap-2">
-                      <span className="h-4 w-4 rounded-full border border-white/40 border-t-white animate-spin-slow" />
                       Cooking…
+                      <Lottie animationData={cookingAnimation}
+                      loop
+                      autoplay
+                      style={{width: 22, height: 22, marginTop: -7}}
+                      />
                     </span>
                   ) : (
                     "Surprise me!"

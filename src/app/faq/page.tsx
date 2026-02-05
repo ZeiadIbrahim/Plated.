@@ -200,13 +200,11 @@ export default function FAQPage() {
                     onClick={() => setOpenIndex(isOpen ? null : index)}
                     variant="ghost"
                     size="lg"
-                    className="w-full text-left normal-case tracking-normal font-semibold rounded-2xl border border-black/10 bg-white/80 px-4 py-4 sm:px-6 sm:py-5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 hover:border-black/20 focus:outline-none focus:ring-2 focus:ring-[#4f8cff]/30"
-                    style={{ minHeight: 56 }}
+                    className="w-full text-left normal-case tracking-normal font-semibold rounded-md border border-black/15 bg-white px-4 py-3 sm:px-6 sm:py-4 hover:border-black/30 focus:outline-none focus:ring-2 focus:ring-[#4f8cff]/20 transition-all"
+                    style={{ minHeight: 48 }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-base sm:text-lg text-[#111111] leading-snug">
-                        {item.question}
-                      </span>
+                      <span className="text-[1.18rem] sm:text-xl font-medium text-[#181818] leading-snug normal-case" style={{ fontFamily: 'Times New Roman, Times, serif' }}>{item.question}</span>
                       <span className="text-xs sm:text-sm uppercase tracking-[0.2em] text-[#111111]/60">
                         {isOpen ? "Close" : "Open"}
                       </span>
@@ -214,12 +212,12 @@ export default function FAQPage() {
                   </Button>
                   <div
                     className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                      isOpen ? 'max-h-40 opacity-100 mt-2 sm:mt-3' : 'max-h-0 opacity-0 mt-0'
+                      isOpen ? 'max-h-40 opacity-100 mt-1 sm:mt-2' : 'max-h-0 opacity-0 mt-0'
                     }`}
                     aria-hidden={!isOpen}
                   >
-                    <div className="bg-white/90 rounded-b-2xl border border-t-0 border-black/10 px-4 py-3 sm:px-6 sm:py-4 text-sm sm:text-base text-[#111111]/80 leading-relaxed wrap-break-word shadow-[0_2px_8px_-4px_rgba(0,0,0,0.06)]">
-                      {item.answer}
+                    <div className="bg-white rounded-b-md border border-t-0 border-black/10 px-4 py-3 sm:px-6 sm:py-4 text-sm sm:text-base text-[#111111]/80 leading-relaxed wrap-break-word">
+                      <span className="text-sm sm:text-[1rem] font-normal text-[#222] leading-relaxed">{item.answer}</span>
                     </div>
                   </div>
                 </div>

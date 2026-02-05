@@ -23,6 +23,7 @@
     "cheerio": "^1.2.0",
     "convert-units": "^2.3.4",
     "fraction.js": "^5.3.4",
+    "lottie-react": "^2.4.1",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
