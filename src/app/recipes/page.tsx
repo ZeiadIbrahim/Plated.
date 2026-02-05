@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/Button";
@@ -41,9 +41,7 @@ const COLLECTION_COLORS = [
 ];
 const COLLECTION_COLOR_STORAGE_KEY = "plated.collectionColors";
 
-export const dynamic = "force-dynamic";
-
-export default function RecipesPage() {
+function RecipesContent() {
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1240,5 +1238,13 @@ export default function RecipesPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function RecipesPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <RecipesContent />
+    </Suspense>
   );
 }
