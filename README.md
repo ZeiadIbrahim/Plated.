@@ -11,6 +11,9 @@ High-end personal cookbook & recipe parser with a digital editorial aesthetic.
 
 1. Create a .env.local file and set:
 	- GEMINI_API_KEY=
+	- PEXELS_API_KEY=
+	- UNSPLASH_ACCESS_KEY=
+	- PIXABAY_API_KEY=
 
 2. (Optional) Configure Supabase credentials:
 	- NEXT_PUBLIC_SUPABASE_URL=
@@ -23,4 +26,5 @@ High-end personal cookbook & recipe parser with a digital editorial aesthetic.
 
 - Supabase SQL schema is in supabase/schema.sql.
 - Recipe parsing endpoint: POST /api/parse { url }.
+- Surprise recipe endpoint: POST /api/surprise { preferences, deviceId }.
 - Core UI component: RecipeCard in src/components/RecipeCard.tsx.

@@ -18,6 +18,8 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.93.3",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
     "cheerio": "^1.2.0",
     "convert-units": "^2.3.4",
     "fraction.js": "^5.3.4",
@@ -26,15 +28,15 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@playwright/test": "^1.50.0",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.2",
     "@types/convert-units": "^2.3.12",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@testing-library/jest-dom": "^6.5.0",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/user-event": "^14.5.2",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^25.0.0",

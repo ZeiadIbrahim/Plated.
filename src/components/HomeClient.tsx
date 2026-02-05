@@ -1,10 +1,11 @@
-"use client";
 
+"use client";
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RecipeCard } from "@/components/RecipeCard";
+import { Button } from "@/components/ui/Button";
 import type { Recipe } from "@/types/recipe";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -14,9 +15,17 @@ const normalizeAvatarUrl = (value: unknown) => {
   return value;
 };
 
+type ChatMessage = { id: string; role: "user" | "assistant"; content: string };
+
+const createMessageId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 export default function HomeClient() {
   const [url, setUrl] = useState("");
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -62,15 +71,36 @@ export default function HomeClient() {
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
   const [headerAvatarError, setHeaderAvatarError] = useState(false);
-  const [chatMessages, setChatMessages] = useState<
-    Array<{ role: "user" | "assistant"; content: string }>
-  >([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showChatOptions, setShowChatOptions] = useState(false);
   const [usedPrompts, setUsedPrompts] = useState<string[]>([]);
+  const [feedbackVotes, setFeedbackVotes] = useState<
+    Record<string, "up" | "down">
+  >({});
+  const [dietPrefs, setDietPrefs] = useState({
+    glutenFree: false,
+    dairyFree: false,
+    nutFree: false,
+    vegan: false,
+    vegetarian: false,
+  });
+  const [discoveryPrefs, setDiscoveryPrefs] = useState({
+    glutenFree: false,
+    vegan: false,
+    vegetarian: false,
+    lactoseFree: false,
+    alcoholFree: false,
+    halal: false,
+  });
+  const [showDiscoveryPrefs, setShowDiscoveryPrefs] = useState(false);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [discoveryDeviceId, setDiscoveryDeviceId] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const baseSuggestions = useMemo(() => {
     if (!recipe) return [] as string[];
@@ -175,6 +205,7 @@ export default function HomeClient() {
     if (!recipe) return;
     setChatMessages([
       {
+        id: createMessageId(),
         role: "assistant",
         content:
           "Ask me about substitutions, timing, or how to adjust this recipe.",
@@ -185,6 +216,7 @@ export default function HomeClient() {
     setChatOpen(false);
     setShowSuggestions(false);
     setUsedPrompts([]);
+    setFeedbackVotes({});
   }, [recipe]);
 
   useEffect(() => {
@@ -218,6 +250,68 @@ export default function HomeClient() {
       : strengthScore === 2
         ? "bg-[#111111]/60"
         : "bg-[#111111]";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("plated.discovery.device");
+    if (stored) {
+      setDiscoveryDeviceId(stored);
+      return;
+    }
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem("plated.discovery.device", id);
+    setDiscoveryDeviceId(id);
+  }, []);
+
+  const chooseSurpriseRecipe = async () => {
+    if (!discoveryDeviceId) return;
+    setDiscoveryLoading(true);
+    setDiscoveryError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/api/surprise", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          preferences: {
+            glutenFree: discoveryPrefs.glutenFree || dietPrefs.glutenFree,
+            vegan: discoveryPrefs.vegan || dietPrefs.vegan,
+            vegetarian: discoveryPrefs.vegetarian || dietPrefs.vegetarian,
+            lactoseFree: discoveryPrefs.lactoseFree,
+            alcoholFree: discoveryPrefs.alcoholFree,
+            halal: discoveryPrefs.halal,
+            dairyFree: dietPrefs.dairyFree,
+            nutFree: dietPrefs.nutFree,
+          },
+          deviceId: discoveryDeviceId,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Unable to find a recipe.");
+      }
+      if (!data?.recipe) {
+        throw new Error("Unable to load a surprise recipe.");
+      }
+      setRecipe(data.recipe as Recipe);
+      setSourceUrl(data.sourceUrl ?? null);
+      setUrl("");
+    } catch (error) {
+      setDiscoveryError(
+        error instanceof Error ? error.message : "Unable to find a recipe."
+      );
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  };
 
   const strengthWidths = [12, 40, 65, 85, 100];
   const strengthWidth = strengthWidths[strengthScore] ?? 12;
@@ -660,9 +754,13 @@ export default function HomeClient() {
     });
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
+  const fetchRecipe = async (
+    targetUrl: string,
+    options?: { showLoading?: boolean }
+  ) => {
+    if (options?.showLoading !== false) {
+      setIsLoading(true);
+    }
     setError(null);
     setSaveMessage(null);
 
@@ -670,7 +768,7 @@ export default function HomeClient() {
       const response = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: targetUrl }),
       });
 
       const data = await response.json();
@@ -679,11 +777,19 @@ export default function HomeClient() {
       }
 
       setRecipe(data as Recipe);
+      setSourceUrl(targetUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
-      setIsLoading(false);
+      if (options?.showLoading !== false) {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await fetchRecipe(url, { showLoading: true });
   };
 
   const handleSaveRecipe = async () => {
@@ -704,11 +810,12 @@ export default function HomeClient() {
       return;
     }
 
+    const resolvedSourceUrl = sourceUrl ?? url;
     const { data: existing } = await supabase
       .from("recipes")
       .select("id")
       .eq("user_id", user.id)
-      .eq("source_url", url)
+      .eq("source_url", resolvedSourceUrl)
       .maybeSingle();
 
     if (existing) {
@@ -721,12 +828,14 @@ export default function HomeClient() {
       user_id: user.id,
       title: recipe.title,
       original_servings: recipe.original_servings,
-      source_url: url,
+      source_url: resolvedSourceUrl,
       payload: recipe,
       rating_value: recipe.rating?.value ?? null,
       rating_count: recipe.rating?.count ?? null,
       allergens: recipe.allergens ?? [],
       tips: recipe.tips ?? [],
+      is_favorite: false,
+      tags: [],
     });
 
     if (insertError) {
@@ -739,12 +848,15 @@ export default function HomeClient() {
     setIsSaving(false);
   };
 
-  const handleChatSubmit = async (promptOverride?: string | unknown) => {
+  const handleChatSubmit = async (
+    promptOverride?: string | unknown,
+    options?: { skipUser?: boolean; regenerate?: boolean }
+  ) => {
     if (!recipe) return;
     const overrideText = typeof promptOverride === "string" ? promptOverride : null;
     const question = (overrideText ?? chatInput).trim();
     if (!question) return;
-    if (!overrideText) {
+    if (!overrideText && !options?.skipUser) {
       setChatInput("");
     }
     if (overrideText) {
@@ -754,10 +866,16 @@ export default function HomeClient() {
     }
     setChatError(null);
     setChatLoading(true);
-    setChatMessages((prev) => [
-      ...prev,
-      { role: "user", content: question },
-    ]);
+    setChatMessages((prev) => {
+      const next = options?.regenerate
+        ? prev.filter((message, index) =>
+            message.role !== "assistant" || index !== prev.length - 1
+          )
+        : prev;
+      return options?.skipUser
+        ? next
+        : [...next, { id: createMessageId(), role: "user", content: question }];
+    });
 
     try {
       const response = await fetch("/api/recipe-chat", {
@@ -766,6 +884,7 @@ export default function HomeClient() {
         body: JSON.stringify({
           recipe,
           question,
+          preferences: dietPrefs,
         }),
       });
 
@@ -776,13 +895,64 @@ export default function HomeClient() {
 
       setChatMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.answer ?? "" },
+        { id: createMessageId(), role: "assistant", content: data.answer ?? "" },
       ]);
     } catch (err) {
       setChatError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const clearChat = () => {
+    setChatMessages([
+      {
+        id: createMessageId(),
+        role: "assistant",
+        content: "Ask me about substitutions, timing, or how to adjust this recipe.",
+      },
+    ]);
+    setChatInput("");
+    setChatError(null);
+    setUsedPrompts([]);
+  };
+
+  const regenerateAnswer = () => {
+    const lastUser = [...chatMessages].reverse().find((m) => m.role === "user");
+    if (!lastUser) return;
+    setChatMessages((prev) => {
+      const indexFromEnd = [...prev]
+        .reverse()
+        .findIndex((m) => m.role === "assistant");
+      if (indexFromEnd === -1) return prev;
+      const removeIndex = prev.length - 1 - indexFromEnd;
+      return prev.filter((_, index) => index !== removeIndex);
+    });
+    handleChatSubmit(lastUser.content, { skipUser: true, regenerate: true });
+  };
+
+  const copyLastAnswer = async () => {
+    const lastAssistant = [...chatMessages]
+      .reverse()
+      .find((m) => m.role === "assistant");
+    if (!lastAssistant) return;
+    await navigator.clipboard.writeText(lastAssistant.content);
+  };
+
+  const sendFeedback = async (message: ChatMessage, vote: "up" | "down") => {
+    setFeedbackVotes((prev) => ({ ...prev, [message.id]: vote }));
+    const { data: userData } = await supabase.auth.getUser();
+    await supabase.from("chat_feedback").insert({
+      user_id: userData.user?.id ?? null,
+      recipe_id: null,
+      message_id: message.id,
+      vote,
+      question: [...chatMessages]
+        .reverse()
+        .find((item) => item.role === "user")?.content,
+      answer: message.content,
+      preferences: dietPrefs,
+    });
   };
 
   const formatChatMessage = (value: string) => {
@@ -796,8 +966,7 @@ export default function HomeClient() {
 
   return (
     <main className="min-h-screen bg-[#FAFAFA]" suppressHydrationWarning>
-      <button
-        type="button"
+      <Button
         onClick={() => {
           if (isSignedIn) {
             setShowProfile(true);
@@ -806,7 +975,9 @@ export default function HomeClient() {
             setShowAuth(true);
           }
         }}
-        className="fixed left-5 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-5"
+        variant="secondary"
+        size="icon"
+        className="fixed left-5 top-5 z-20 sm:left-5 sm:top-5"
         aria-label="Account"
       >
         {isSignedIn && headerAvatarUrl && !headerAvatarError ? (
@@ -838,9 +1009,8 @@ export default function HomeClient() {
             <path d="M5 20c1.8-4.2 11.2-4.2 14 0" />
           </svg>
         )}
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
         onClick={() => {
           if (isSignedIn) {
             router.push("/recipes");
@@ -848,7 +1018,9 @@ export default function HomeClient() {
             setShowAuth(true);
           }
         }}
-        className="fixed left-16 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-20"
+        variant="secondary"
+        size="icon"
+        className="fixed left-16 top-5 z-20 sm:left-5 sm:top-20"
         aria-label="Recipes"
       >
         <svg
@@ -867,7 +1039,7 @@ export default function HomeClient() {
           <path d="M9 8h6" />
           <path d="M9 12h6" />
         </svg>
-      </button>
+      </Button>
       <section className="mx-auto w-full max-w-2xl px-4 pb-6 pt-24 sm:px-6 sm:pt-16">
         <div className="flex flex-col gap-8">
           <header className="flex flex-col gap-4 animate-fade-up">
@@ -900,21 +1072,154 @@ export default function HomeClient() {
                 className="rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
               />
             </label>
-            <button
+            <Button
               type="submit"
               disabled={isLoading}
-              className="group inline-flex cursor-pointer items-center justify-center gap-3 rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_14px_36px_-22px_rgba(17,17,17,0.8)] hover:ring-1 hover:ring-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/60 disabled:cursor-not-allowed disabled:opacity-60"
+              variant="primary"
+              size="lg"
+              className="group gap-3"
             >
               {isLoading ? (
                 <>
                   <span className="h-4 w-4 rounded-full border border-white/40 border-t-white animate-spin-slow" />
-                  Fetching…
+                  Cooking…
                 </>
               ) : (
                 "Fetch Recipe"
               )}
-            </button>
+
+            </Button>
             {error && <p className="text-sm text-[#D9534F]">{error}</p>}
+
+            <div className="mt-2 grid gap-4 rounded-2xl border border-black/10 bg-white/60 p-5">
+              <div className="grid gap-2">
+                <span className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                  Choose me a recipe!
+                </span>
+                <div className="flex flex-wrap gap-3">
+                  {([
+                    ["vegan", "Vegan"],
+                    ["vegetarian", "Vegetarian"],
+                    ["halal", "Halal"],
+                  ] as const).map(([key, label]) => (
+                    <label
+                      key={key}
+                      className="flex items-center gap-1.5 rounded-full border border-black/10 px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-[#111111]/60"
+                    >
+                      <span>{label}</span>
+                      <span className="relative inline-flex h-4 w-8 items-center">
+                        <input
+                          type="checkbox"
+                          checked={discoveryPrefs[key]}
+                          onChange={() =>
+                            setDiscoveryPrefs((prev) => ({
+                              ...prev,
+                              [key]: !prev[key],
+                            }))
+                          }
+                          className="peer sr-only"
+                        />
+                        <span className="h-4 w-8 rounded-full bg-black/10 transition peer-checked:bg-black/60" />
+                        <span className="absolute left-0.5 h-3 w-3 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <Button
+                  onClick={() => setShowDiscoveryPrefs((prev) => !prev)}
+                  variant="chip"
+                  size="sm"
+                  className="self-start text-[#111111]/60"
+                >
+                  {showDiscoveryPrefs
+                    ? "Hide other preferences & allergies"
+                    : "Other preferences & allergies"}
+                </Button>
+                {showDiscoveryPrefs ? (
+                  <div className="grid gap-3 rounded-2xl border border-black/10 bg-white/60 p-3">
+                    <div className="grid gap-2">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-[#111111]/50">
+                        Allergies
+                      </span>
+                      <div className="flex flex-wrap gap-3">
+                        {([
+                          ["glutenFree", "Gluten-free"],
+                          ["lactoseFree", "Lactose-free"],
+                        ] as const).map(([key, label]) => (
+                          <label
+                            key={key}
+                            className="flex items-center gap-1.5 rounded-full border border-black/10 px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-[#111111]/60"
+                          >
+                            <span>{label}</span>
+                            <span className="relative inline-flex h-4 w-8 items-center">
+                              <input
+                                type="checkbox"
+                                checked={discoveryPrefs[key]}
+                                onChange={() =>
+                                  setDiscoveryPrefs((prev) => ({
+                                    ...prev,
+                                    [key]: !prev[key],
+                                  }))
+                                }
+                                className="peer sr-only"
+                              />
+                              <span className="h-4 w-8 rounded-full bg-black/10 transition peer-checked:bg-black/60" />
+                              <span className="absolute left-0.5 h-3 w-3 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-[#111111]/50">
+                        Other preferences
+                      </span>
+                      <div className="flex flex-wrap gap-3">
+                        <label className="flex items-center gap-1.5 rounded-full border border-black/10 px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-[#111111]/60">
+                          <span>Alcohol-free</span>
+                          <span className="relative inline-flex h-4 w-8 items-center">
+                            <input
+                              type="checkbox"
+                              checked={discoveryPrefs.alcoholFree}
+                              onChange={() =>
+                                setDiscoveryPrefs((prev) => ({
+                                  ...prev,
+                                  alcoholFree: !prev.alcoholFree,
+                                }))
+                              }
+                              className="peer sr-only"
+                            />
+                            <span className="h-4 w-8 rounded-full bg-black/10 transition peer-checked:bg-black/60" />
+                            <span className="absolute left-0.5 h-3 w-3 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex justify-center">
+                <Button
+                  onClick={chooseSurpriseRecipe}
+                  disabled={discoveryLoading}
+                  variant="primary"
+                  size="lg"
+                  className="group"
+                >
+                  {discoveryLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border border-white/40 border-t-white animate-spin-slow" />
+                      Cooking…
+                    </span>
+                  ) : (
+                    "Surprise me!"
+                  )}
+                </Button>
+              </div>
+              {discoveryError ? (
+                <p className="text-sm text-[#D9534F]">{discoveryError}</p>
+              ) : null}
+            </div>
           </form>
         </div>
       </section>
@@ -926,10 +1231,11 @@ export default function HomeClient() {
               Ask about this recipe
             </h2>
             <div className="overflow-hidden rounded-2xl border border-black/10 bg-white/70 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.35)]">
-              <button
-                type="button"
+              <Button
                 onClick={() => setChatOpen((prev) => !prev)}
-                className={`flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-all duration-500 ${
+                variant="ghost"
+                size="md"
+                className={`w-full justify-between gap-4 px-6 py-5 text-left normal-case tracking-normal font-normal rounded-2xl ${
                   chatOpen
                     ? "bg-black/5"
                     : "bg-white/80 hover:bg-black/5"
@@ -961,7 +1267,7 @@ export default function HomeClient() {
                     <path d="M6 9l6 6 6-6" />
                   </svg>
                 </span>
-              </button>
+              </Button>
 
               <div
                 className={`grid transition-all duration-500 ease-out ${
@@ -975,7 +1281,7 @@ export default function HomeClient() {
                   >
                     {chatMessages.map((message, index) => (
                       <div
-                        key={`${message.role}-${index}`}
+                        key={message.id ?? `${message.role}-${index}`}
                         className={`flex ${
                           message.role === "user"
                             ? "justify-end"
@@ -986,7 +1292,7 @@ export default function HomeClient() {
                           className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-[0_18px_45px_-35px_rgba(0,0,0,0.5)] ${
                             message.role === "user"
                               ? "bg-[#111111] text-white"
-                              : "bg-white text-[#111111]/80"
+                              : "bg-[#F4F1EC] text-[#111111]/80"
                           }`}
                         >
                           <span
@@ -994,12 +1300,26 @@ export default function HomeClient() {
                               __html: formatChatMessage(message.content),
                             }}
                           />
+                          {message.role === "assistant" && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-[#111111]/50">
+                              <Button
+                                onClick={() =>
+                                  navigator.clipboard.writeText(message.content)
+                                }
+                                variant="chip"
+                                size="sm"
+                                className="px-2 py-1 text-[10px] text-[#111111]/60"
+                              >
+                                Copy
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                     {chatLoading ? (
                       <div className="flex justify-start">
-                        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-[#111111]/70">
+                        <div className="rounded-2xl bg-[#F4F1EC] px-4 py-3 text-sm text-[#111111]/70">
                           Thinking…
                         </div>
                       </div>
@@ -1009,33 +1329,6 @@ export default function HomeClient() {
                   {chatError ? (
                     <p className="mt-3 text-sm text-[#D9534F]">{chatError}</p>
                   ) : null}
-
-                  <div className="mt-4 grid gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowSuggestions((prev) => !prev)}
-                      className="self-start rounded-full border border-black/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
-                    >
-                      {showSuggestions ? "Hide prompts" : "Show prompts"}
-                    </button>
-                    {showSuggestions && (
-                      <div className="grid gap-2">
-                        {chatSuggestions.map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            type="button"
-                            onClick={() => {
-                              if (chatLoading) return;
-                              handleChatSubmit(suggestion);
-                            }}
-                            className="w-full rounded-full border border-black/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                     <input
@@ -1050,14 +1343,106 @@ export default function HomeClient() {
                       placeholder="Ask about swaps, timing, or ingredients…"
                       className="flex-1 rounded-full border border-black/10 bg-white px-4 py-3 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
                     />
-                    <button
-                      type="button"
+                    <Button
                       onClick={handleChatSubmit}
                       disabled={chatLoading || !chatInput.trim()}
-                      className="inline-flex items-center justify-center rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_14px_36px_-22px_rgba(17,17,17,0.8)] disabled:cursor-not-allowed disabled:opacity-60"
+                      variant="primary"
+                      size="lg"
                     >
                       Ask
-                    </button>
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    <Button
+                      onClick={() => setShowChatOptions((prev) => !prev)}
+                      variant="chip"
+                      size="md"
+                      className="self-start px-4 text-[#111111]/70"
+                    >
+                      {showChatOptions ? "Hide options" : "More options"}
+                    </Button>
+
+                    {showChatOptions ? (
+                      <div className="grid gap-3 rounded-2xl border border-black/10 bg-white/60 p-4">
+                        <Button
+                          onClick={() => setShowSuggestions((prev) => !prev)}
+                          variant="chip"
+                          size="md"
+                          active={showSuggestions}
+                          className="self-start px-4"
+                        >
+                          {showSuggestions ? "Hide prompts" : "Show prompts"}
+                        </Button>
+                        {showSuggestions && (
+                          <div className="grid gap-2">
+                            {chatSuggestions.map((suggestion) => (
+                              <Button
+                                key={suggestion}
+                                onClick={() => {
+                                  if (chatLoading) return;
+                                  handleChatSubmit(suggestion);
+                                }}
+                                variant="chip"
+                                size="md"
+                                className="w-full justify-start px-4 text-[#111111]/60"
+                              >
+                                {suggestion}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={clearChat}
+                            variant="chip"
+                            size="sm"
+                            className="px-3 py-1 text-[10px] text-[#111111]/60"
+                          >
+                            Clear chat
+                          </Button>
+                          <Button
+                            onClick={regenerateAnswer}
+                            variant="chip"
+                            size="sm"
+                            className="px-3 py-1 text-[10px] text-[#111111]/60"
+                          >
+                            Regenerate
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          {([
+                            ["glutenFree", "Gluten-free"],
+                            ["dairyFree", "Dairy-free"],
+                            ["nutFree", "Nut-free"],
+                            ["vegan", "Vegan"],
+                            ["vegetarian", "Vegetarian"],
+                          ] as const).map(([key, label]) => (
+                            <label
+                              key={key}
+                              className="flex items-center gap-2 rounded-full border border-black/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[#111111]/60"
+                            >
+                              <span>{label}</span>
+                              <span className="relative inline-flex h-5 w-9 items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={dietPrefs[key]}
+                                  onChange={() =>
+                                    setDietPrefs((prev) => ({
+                                      ...prev,
+                                      [key]: !prev[key],
+                                    }))
+                                  }
+                                  className="peer sr-only"
+                                />
+                                <span className="h-5 w-9 rounded-full bg-black/10 transition peer-checked:bg-black/60" />
+                                <span className="absolute left-1 h-3 w-3 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1074,6 +1459,7 @@ export default function HomeClient() {
             }}
             isSaving={isSaving}
             saveMessage={saveMessage}
+            sourceUrl={sourceUrl ?? undefined}
           />
         </>
       )}
@@ -1095,52 +1481,50 @@ export default function HomeClient() {
                     : "Please sign in or create an account to save recipes."}
                 </p>
               </div>
-              <button
-                type="button"
+              <Button
                 onClick={() => setShowAuth(false)}
-                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                variant="chip"
+                size="sm"
+                className="text-[#111111]/70"
               >
                 Close
-              </button>
+              </Button>
             </div>
 
             <div className="mt-6 flex gap-2 rounded-full border border-black/10 p-1">
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setAuthMode("sign-in");
                   resetAuthState();
                 }}
-                className={`flex-1 cursor-pointer rounded-full px-4 py-2 text-xs uppercase tracking-[0.2em] transition-all duration-300 ${
-                  authMode === "sign-in"
-                    ? "bg-[#111111] text-white"
-                    : "text-[#111111]/70 hover:bg-black/5"
-                }`}
+                variant="chip"
+                size="md"
+                active={authMode === "sign-in"}
+                className="flex-1"
               >
                 Sign in
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={() => {
                   setAuthMode("sign-up");
                   resetAuthState();
                 }}
-                className={`flex-1 cursor-pointer rounded-full px-4 py-2 text-xs uppercase tracking-[0.2em] transition-all duration-300 ${
-                  authMode === "sign-up"
-                    ? "bg-[#111111] text-white"
-                    : "text-[#111111]/70 hover:bg-black/5"
-                }`}
+                variant="chip"
+                size="md"
+                active={authMode === "sign-up"}
+                className="flex-1"
               >
                 Sign up
-              </button>
+              </Button>
             </div>
 
             {authMode === "sign-in" && (
               <form className="mt-6 grid gap-4" onSubmit={handleSignIn}>
-                <button
-                  type="button"
+                <Button
                   onClick={handleGoogleAuth}
-                  className="inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                  variant="secondary"
+                  size="lg"
+                  className="w-full justify-center gap-3"
                 >
                   <svg
                     aria-hidden="true"
@@ -1166,7 +1550,7 @@ export default function HomeClient() {
                     />
                   </svg>
                   Continue with Google
-                </button>
+                </Button>
                 <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-[#111111]/50">
                   <span className="h-px flex-1 bg-black/10" />
                   or
@@ -1198,10 +1582,11 @@ export default function HomeClient() {
                       onChange={(event) => setPassword(event.target.value)}
                       className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
                     />
-                    <button
-                      type="button"
+                    <Button
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
+                      variant="ghost"
+                      size="iconSm"
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 text-[#111111]/60 hover:text-[#111111] ${
                         showPassword ? "animate-eye-toggle" : ""
                       }`}
                       aria-label={showPassword ? "Hide password" : "Show password"}
@@ -1238,7 +1623,7 @@ export default function HomeClient() {
                           <path d="M4 4l16 16" />
                         </svg>
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </label>
                 {authError && (
@@ -1249,23 +1634,26 @@ export default function HomeClient() {
                     {authSuccess}
                   </p>
                 )}
-                <button
+                <Button
                   type="submit"
                   disabled={authLoading}
-                  className="mt-2 cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                  variant="primary"
+                  size="lg"
+                  className="mt-2"
                 >
                   {authLoading ? "Signing in…" : "Sign in"}
-                </button>
+                </Button>
               </form>
             )}
 
             {authMode === "sign-up" && (
               <>
                 <form className="mt-6 grid gap-4" onSubmit={handleSignUp}>
-                  <button
-                    type="button"
+                  <Button
                     onClick={handleGoogleAuth}
-                    className="inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                    variant="secondary"
+                    size="lg"
+                    className="w-full justify-center gap-3"
                   >
                     <svg
                       aria-hidden="true"
@@ -1291,7 +1679,7 @@ export default function HomeClient() {
                       />
                     </svg>
                     Continue with Google
-                  </button>
+                  </Button>
                   <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-[#111111]/50">
                     <span className="h-px flex-1 bg-black/10" />
                     or
@@ -1336,10 +1724,11 @@ export default function HomeClient() {
                         onChange={(event) => setPassword(event.target.value)}
                         className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
                       />
-                      <button
-                        type="button"
+                      <Button
                         onClick={() => setShowPassword((prev) => !prev)}
-                        className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
+                        variant="ghost"
+                        size="iconSm"
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 text-[#111111]/60 hover:text-[#111111] ${
                           showPassword ? "animate-eye-toggle" : ""
                         }`}
                         aria-label={showPassword ? "Hide password" : "Show password"}
@@ -1376,7 +1765,7 @@ export default function HomeClient() {
                             <path d="M4 4l16 16" />
                           </svg>
                         )}
-                      </button>
+                      </Button>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-[#111111]/60">
                       <span>Password strength</span>
@@ -1402,10 +1791,11 @@ export default function HomeClient() {
                         onChange={(event) => setConfirmPassword(event.target.value)}
                         className="w-full rounded-full border border-black/10 bg-white px-4 py-3 pr-12 text-sm text-[#111111] outline-none transition-colors duration-300 focus:border-black/40"
                       />
-                      <button
-                        type="button"
+                      <Button
                         onClick={() => setShowConfirmPassword((prev) => !prev)}
-                        className={`absolute right-4 top-1/2 -translate-y-1/2 text-[#111111]/60 transition-colors duration-300 hover:text-[#111111] ${
+                        variant="ghost"
+                        size="iconSm"
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 text-[#111111]/60 hover:text-[#111111] ${
                           showConfirmPassword ? "animate-eye-toggle" : ""
                         }`}
                         aria-label={
@@ -1446,7 +1836,7 @@ export default function HomeClient() {
                             <path d="M4 4l16 16" />
                           </svg>
                         )}
-                      </button>
+                      </Button>
                     </div>
                   </label>
                   {authError && (
@@ -1457,13 +1847,15 @@ export default function HomeClient() {
                       {authSuccess}
                     </p>
                   )}
-                  <button
+                  <Button
                     type="submit"
                     disabled={authLoading}
-                    className="mt-2 cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                    variant="primary"
+                    size="lg"
+                    className="mt-2"
                   >
                     {authLoading ? "Creating account…" : "Create account"}
-                  </button>
+                  </Button>
                 </form>
               </>
             )}
@@ -1484,13 +1876,14 @@ export default function HomeClient() {
                   Signed in as {authUserEmail ?? "your account"}.
                 </p>
               </div>
-              <button
-                type="button"
+              <Button
                 onClick={() => setShowProfile(false)}
-                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                variant="chip"
+                size="sm"
+                className="text-[#111111]/70"
               >
                 Close
-              </button>
+              </Button>
             </div>
 
             <form className="mt-6 grid gap-4" onSubmit={handleProfileSave}>
@@ -1537,18 +1930,19 @@ export default function HomeClient() {
                 <p className="text-xs uppercase tracking-[0.2em] text-[#111111]/50">
                   Click to upload
                 </p>
-                <button
-                  type="button"
+                <Button
                   onClick={() => {
                     setProfileAvatarFile(null);
                     setProfileAvatarPreview("");
                     setProfileAvatarUrl("");
                     setRemoveAvatar(true);
                   }}
-                  className="text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-colors duration-300 hover:text-[#111111]"
+                  variant="ghost"
+                  size="sm"
+                  className="text-[#111111]/60 hover:text-[#111111]"
                 >
                   Remove photo
-                </button>
+                </Button>
               </div>
 
               <label className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[#111111]/60">
@@ -1591,32 +1985,36 @@ export default function HomeClient() {
                 </p>
               )}
 
-              <button
+              <Button
                 type="submit"
                 disabled={profileLoading}
-                className="mt-2 cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                variant="primary"
+                size="lg"
+                className="mt-2"
               >
                 {profileLoading ? "Saving…" : "Save changes"}
-              </button>
+              </Button>
 
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
+                <Button
                   onClick={handleSignOut}
-                  className="cursor-pointer rounded-full border border-black/10 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                  variant="chip"
+                  size="lg"
+                  className="px-6"
                 >
                   Sign out
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={() => {
                     setShowDeleteConfirm(true);
                     setShowDeleteModal(true);
                   }}
-                  className="cursor-pointer rounded-full border border-[#D9534F]/50 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#D9534F] transition-all duration-300 hover:-translate-y-0.5 hover:border-[#D9534F] hover:bg-[#D9534F]/10"
+                  variant="destructive"
+                  size="lg"
+                  className="px-6"
                 >
                   Delete account
-                </button>
+                </Button>
               </div>
             </form>
 
@@ -1630,13 +2028,14 @@ export default function HomeClient() {
                     Open the admin console.
                   </p>
                 </div>
-                <button
-                  type="button"
+                <Button
                   onClick={() => router.push("/admin")}
-                  className="rounded-full border border-black/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70"
+                  variant="chip"
+                  size="md"
+                  className="px-4 text-[#111111]/70"
                 >
                   Admin console
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
@@ -1656,16 +2055,17 @@ export default function HomeClient() {
                   This will permanently delete your account and all saved recipes.
                 </p>
               </div>
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setShowDeleteModal(false);
                 }}
-                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                variant="chip"
+                size="sm"
+                className="text-[#111111]/70"
               >
                 Close
-              </button>
+              </Button>
             </div>
 
             <div className="mt-4 rounded-2xl border border-[#D9534F]/20 bg-[#D9534F]/5 p-4 text-sm text-[#111111]/80">
@@ -1713,23 +2113,25 @@ export default function HomeClient() {
             )}
 
             <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
+              <Button
                 onClick={handleDeleteAccount}
-                className="cursor-pointer rounded-full bg-[#D9534F] px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#C94743]"
+                variant="destructive"
+                size="md"
+                className="px-5"
               >
                 Confirm delete
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setShowDeleteModal(false);
                 }}
-                className="cursor-pointer rounded-full border border-black/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                variant="chip"
+                size="md"
+                className="px-5"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1748,13 +2150,14 @@ export default function HomeClient() {
                   We sent a code to {verifyEmail ?? authEmail ?? "your email"}.
                 </p>
               </div>
-              <button
-                type="button"
+              <Button
                 onClick={() => setShowVerifyModal(false)}
-                className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5"
+                variant="chip"
+                size="sm"
+                className="text-[#111111]/70"
               >
                 Close
-              </button>
+              </Button>
             </div>
 
             <form
@@ -1810,31 +2213,34 @@ export default function HomeClient() {
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <button
+                <Button
                   type="submit"
                   disabled={verifyLoading || otpDigits.join("").length !== 6}
-                  className="cursor-pointer rounded-full bg-[#111111] px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-black disabled:opacity-60"
+                  variant="primary"
+                  size="lg"
                 >
                   {verifyLoading ? "Verifying…" : "Verify email"}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={handleResendCode}
                   disabled={verifyLoading}
-                  className="cursor-pointer rounded-full border border-black/10 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 disabled:opacity-60"
+                  variant="chip"
+                  size="lg"
+                  className="text-[#111111]/70"
                 >
                   Resend code
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   onClick={() => {
                     setShowVerifyModal(false);
                     setShowAuth(true);
                   }}
-                  className="text-xs uppercase tracking-[0.2em] text-[#111111]/60 transition-colors duration-300 hover:text-[#111111]"
+                  variant="ghost"
+                  size="sm"
+                  className="text-[#111111]/60 hover:text-[#111111]"
                 >
                   Edit email
-                </button>
+                </Button>
               </div>
             </form>
           </div>

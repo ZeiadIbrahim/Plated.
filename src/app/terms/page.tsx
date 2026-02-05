@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { Button } from "@/components/ui/Button";
 
 export default function TermsPage() {
   const router = useRouter();
@@ -71,8 +72,7 @@ export default function TermsPage() {
 
   return (
     <main className="min-h-screen bg-[#FAFAFA]" suppressHydrationWarning>
-      <button
-        type="button"
+      <Button
         onClick={async () => {
           const { data } = await supabase.auth.getSession();
           if (data.session) {
@@ -81,7 +81,9 @@ export default function TermsPage() {
             router.push("/?auth=1");
           }
         }}
-        className="fixed left-5 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-5"
+        variant="secondary"
+        size="icon"
+        className="fixed left-5 top-5 z-20 sm:left-5 sm:top-5"
         aria-label="Account"
       >
         {headerAvatarUrl && !headerAvatarError ? (
@@ -97,11 +99,12 @@ export default function TermsPage() {
             {headerInitial}
           </span>
         )}
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
         onClick={() => router.push("/")}
-        className="fixed left-16 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)] sm:left-5 sm:top-20"
+        variant="secondary"
+        size="icon"
+        className="fixed left-16 top-5 z-20 sm:left-5 sm:top-20"
         aria-label="Home"
       >
         <svg
@@ -118,7 +121,7 @@ export default function TermsPage() {
           <path d="M4 11l8-6 8 6" />
           <path d="M6 10v10h12V10" />
         </svg>
-      </button>
+      </Button>
       <section
         className="mx-auto w-full max-w-2xl px-4 py-12 pt-24 sm:px-6 sm:py-16"
         suppressHydrationWarning

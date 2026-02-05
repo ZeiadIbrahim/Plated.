@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { Button } from "@/components/ui/Button";
 
 type AdminRecipe = {
   id: string;
@@ -161,13 +162,14 @@ export default function AdminPage() {
                 Manage recipes across all users.
               </p>
             </div>
-            <button
-              type="button"
+            <Button
               onClick={() => router.push("/")}
-              className="rounded-full border border-black/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#111111]/70"
+              variant="chip"
+              size="md"
+              className="px-4 text-[#111111]/70"
             >
               Back home
-            </button>
+            </Button>
           </header>
 
           {loading ? (
@@ -181,16 +183,17 @@ export default function AdminPage() {
                   <p className="text-xs uppercase tracking-[0.3em] text-[#111111]/60">
                     Users
                   </p>
-                  <button
-                    type="button"
+                  <Button
                     onClick={() => {
                       setSelectedUserId(null);
                       loadRecipesForUser(null);
                     }}
-                    className="text-xs uppercase tracking-[0.2em] text-[#111111]/60"
+                    variant="ghost"
+                    size="sm"
+                    className="text-[#111111]/60"
                   >
                     All recipes
-                  </button>
+                  </Button>
                 </div>
                 <div className="grid gap-3">
                   {users.map((user) => (
@@ -202,13 +205,14 @@ export default function AdminPage() {
                           : "border-black/10 text-[#111111]/70"
                       }`}
                     >
-                      <button
-                        type="button"
+                      <Button
                         onClick={() => {
                           setSelectedUserId(user.id);
                           loadRecipesForUser(user.id);
                         }}
-                        className="text-left"
+                        variant="ghost"
+                        size="md"
+                        className="w-full text-left normal-case tracking-normal font-normal"
                       >
                         <div className="text-sm normal-case tracking-normal">
                           {user.email ?? "No email"}
@@ -217,16 +221,17 @@ export default function AdminPage() {
                           <span>{user.id.slice(0, 8)}</span>
                           {user.role ? <span>• {user.role}</span> : null}
                         </div>
-                      </button>
+                      </Button>
                       <div className="mt-3">
-                        <button
-                          type="button"
+                        <Button
                           onClick={() => deleteUser(user.id)}
                           disabled={deletingUserId === user.id}
-                          className="rounded-full border border-[#D9534F]/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D9534F] disabled:opacity-60"
+                          variant="destructive"
+                          size="sm"
+                          className="px-3 py-1 text-[10px]"
                         >
                           {deletingUserId === user.id ? "Deleting…" : "Delete user"}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -277,14 +282,15 @@ export default function AdminPage() {
                           </a>
                         ) : null}
                         <div>
-                          <button
-                            type="button"
+                          <Button
                             onClick={() => deleteRecipe(recipe.id)}
                             disabled={deletingId === recipe.id}
-                            className="rounded-full border border-[#D9534F]/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#D9534F] disabled:opacity-60"
+                            variant="destructive"
+                            size="md"
+                            className="px-4"
                           >
                             {deletingId === recipe.id ? "Deleting…" : "Delete"}
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}

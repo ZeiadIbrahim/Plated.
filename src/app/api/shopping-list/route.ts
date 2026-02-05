@@ -3,8 +3,26 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const runtime = "nodejs";
 
+type ShoppingListItem = {
+  item: string;
+  amount: number | null;
+  unit: string | null;
+  notes?: string | null;
+  recipes?: string[];
+};
+
 const SYSTEM_PROMPT =
-  "You are a warm, friendly culinary assistant with a light sense of humor. Use the provided recipe context as primary guidance. Offer practical substitutions, cooking tips, timing, serving adjustments, and simple side suggestions. If asked about a side you mentioned (e.g., coleslaw), give a quick, minimal recipe or outline using common pantry items. Keep responses short: 2-4 concise sentences or 3-5 bullets max. Use emojis sparingly (0-2 per response). If a question is off-topic (politics, finance, general trivia), reply: 'I can only help with this recipe—ingredients, substitutions, measurements, and cooking steps.' If a question is medical, say you are not a medical professional and suggest consulting a qualified source.";
+  "You are a precise kitchen assistant. Build a consolidated shopping list from multiple recipes. Merge equivalent items (e.g., plain flour and all-purpose flour). Keep units consistent; do NOT sum across different units. If a unit differs, create separate line items. Use null for unknown amount or unit. Keep item names short. Return ONLY valid JSON in this format: { items: [{ item, amount, unit, notes, recipes }] }.";
+
+const extractJson = (value: string) => {
+  const firstBrace = value.indexOf("{");
+  const lastBrace = value.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    throw new Error("No JSON payload found in model response.");
+  }
+  const jsonString = value.slice(firstBrace, lastBrace + 1);
+  return JSON.parse(jsonString);
+};
 
 const listAvailableModels = async (apiKey: string) => {
   const response = await fetch(
@@ -29,44 +47,23 @@ const pickFallbackModel = (models: string[]) => {
 
 export async function POST(request: Request) {
   try {
-    const { recipe, question, preferences } = (await request.json()) as {
-      recipe?: unknown;
-      question?: string;
-      preferences?: {
-        glutenFree?: boolean;
-        dairyFree?: boolean;
-        nutFree?: boolean;
-        vegan?: boolean;
-        vegetarian?: boolean;
-      };
+    const { recipes } = (await request.json()) as {
+      recipes?: Array<{
+        title?: string;
+        ingredients?: Array<{
+          item?: string;
+          amount?: number | null;
+          unit?: string | null;
+        }>;
+      }>;
     };
 
-    if (!recipe || !question?.trim()) {
+    if (!recipes || !Array.isArray(recipes) || recipes.length === 0) {
       return NextResponse.json(
-        { error: "Missing recipe or question" },
+        { error: "Missing recipes" },
         { status: 400 }
       );
     }
-
-    const normalizedQuestion = question.toLowerCase();
-    const offTopicSignals = [
-      "politics",
-      "election",
-      "president",
-      "religion",
-      "war",
-      "government",
-      "crypto",
-      "stocks",
-      "finance",
-      "relationship",
-      "dating",
-      "medical",
-      "diagnose",
-    ];
-    const isOffTopic = offTopicSignals.some((signal) =>
-      normalizedQuestion.includes(signal)
-    );
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -80,27 +77,7 @@ export async function POST(request: Request) {
     const configuredModel =
       process.env.GEMINI_MODEL ?? "gemini-1.5-flash-latest";
 
-    const prefs = preferences ?? {};
-    const activePreferences = Object.entries({
-      "Gluten-free": prefs.glutenFree,
-      "Dairy-free": prefs.dairyFree,
-      "Nut-free": prefs.nutFree,
-      Vegan: prefs.vegan,
-      Vegetarian: prefs.vegetarian,
-    })
-      .filter(([, value]) => Boolean(value))
-      .map(([label]) => label);
-    const preferenceText = activePreferences.length
-      ? `Dietary preferences to respect: ${activePreferences.join(", ")}.`
-      : "No dietary preferences provided.";
-
-    const prompt = `Recipe context (JSON):\n${JSON.stringify(
-      recipe,
-      null,
-      2
-    )}\n\nUser question: ${question}\n\n${preferenceText}\n\nIf off-topic: ${
-      isOffTopic ? "Yes" : "No"
-    }\n\nAnswer:`;
+    const prompt = `Recipes (JSON):\n${JSON.stringify(recipes, null, 2)}\n\nReturn the consolidated shopping list JSON now.`;
 
     const runModel = async (modelName: string) => {
       const model = genAI.getGenerativeModel({
@@ -139,7 +116,25 @@ export async function POST(request: Request) {
       text = await runModel(fallback);
     }
 
-    return NextResponse.json({ answer: text.trim() }, { status: 200 });
+    const json = extractJson(text) as { items?: ShoppingListItem[] };
+    const items = Array.isArray(json.items) ? json.items : [];
+
+    const normalized = items
+      .map((item) => ({
+        item: item.item?.toString().trim() ?? "",
+        amount:
+          typeof item.amount === "number" && Number.isFinite(item.amount)
+            ? item.amount
+            : null,
+        unit: item.unit ? item.unit.toString().trim() : null,
+        notes: item.notes ? item.notes.toString().trim() : null,
+        recipes: Array.isArray(item.recipes)
+          ? item.recipes.map((recipe) => recipe.toString().trim()).filter(Boolean)
+          : [],
+      }))
+      .filter((item) => item.item.length > 0);
+
+    return NextResponse.json({ items: normalized }, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,19 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 const THEME_KEY = "plated.theme";
 
 export const ThemeToggle = () => {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem(THEME_KEY);
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    return stored ? stored === "dark" : prefersDark;
-  });
+  const [isDark, setIsDark] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const stored = localStorage.getItem(THEME_KEY);
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const next = stored ? stored === "dark" : prefersDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("theme-dark", next);
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted || typeof window === "undefined") return;
     document.documentElement.classList.toggle("theme-dark", isDark);
   }, [isDark]);
 
@@ -27,11 +34,18 @@ export const ThemeToggle = () => {
   };
 
   return (
-    <button
-      type="button"
+    <Button
       onClick={handleToggle}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className="fixed right-5 top-5 z-30 inline-flex h-10 w-16 items-center justify-center rounded-full border border-black/10 bg-white/80 text-[#111111] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-white hover:shadow-[0_14px_32px_-18px_rgba(0,0,0,0.65)]"
+      variant="secondary"
+      size="icon"
+      className="fixed right-5 top-5 z-30 w-16"
+      aria-label={
+        isMounted
+          ? isDark
+            ? "Switch to light mode"
+            : "Switch to dark mode"
+          : "Toggle theme"
+      }
     >
       <span className="relative flex h-6 w-6 items-center justify-center">
         <svg
@@ -71,6 +85,6 @@ export const ThemeToggle = () => {
           <path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5Z" />
         </svg>
       </span>
-    </button>
+    </Button>
   );
 };

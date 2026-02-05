@@ -156,6 +156,10 @@ button:disabled {
   animation: modal-in 260ms ease-out both;
 }
 
+.print-only {
+  display: none;
+}
+
 
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -168,5 +172,36 @@ button:disabled {
   .animate-success-pulse,
   .animate-modal-in {
     animation: none !important;
+  }
+}
+
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-scope * {
+    visibility: hidden !important;
+  }
+
+  .print-scope .print-only,
+  .print-scope .print-only * {
+    visibility: visible !important;
+  }
+
+  .print-scope .print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
   }
 }

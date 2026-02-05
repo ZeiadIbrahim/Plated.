@@ -203,25 +203,69 @@ const normalizeRecipeYield = (value: unknown) => {
   return null;
 };
 
+const cleanInstruction = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^(equipment|instructions|method|directions|steps)$/i.test(trimmed)) {
+    return "";
+  }
+  const withoutPrefix = trimmed.replace(
+    /^(step\s*\d+\s*[:.-]?|\d+\s*[\).:-])\s*/i,
+    ""
+  );
+  const collapsed = withoutPrefix.replace(/\s{2,}/g, " ").trim();
+  if (/^(equipment|instructions|method|directions|steps)$/i.test(collapsed)) {
+    return "";
+  }
+  return collapsed;
+};
+
+const normalizeInstructions = (steps: string[]) => {
+  const cleaned = steps
+    .map((step) => cleanInstruction(step))
+    .filter(
+      (step) =>
+        !!step &&
+        !/^step\s*\d+$/i.test(step) &&
+        !/^\d+$/.test(step)
+    );
+
+  const merged: string[] = [];
+  for (const step of cleaned) {
+    if (!merged.length) {
+      merged.push(step);
+      continue;
+    }
+    const last = merged[merged.length - 1];
+    const lastEnds = /[.!?]$/.test(last.trim());
+    const shouldMerge = step.length < 40 || !lastEnds;
+    if (shouldMerge) {
+      merged[merged.length - 1] = `${last} ${step}`.replace(/\s{2,}/g, " ");
+    } else {
+      merged.push(step);
+    }
+  }
+
+  return merged;
+};
+
 const normalizeSchemaInstructions = (value: unknown) => {
   if (!value) return [] as string[];
-  if (typeof value === "string") return [value];
+  if (typeof value === "string") return normalizeInstructions([value]);
   if (Array.isArray(value)) {
-    return value
-      .flatMap((item) => {
-        if (typeof item === "string") return [item];
-        if (item && typeof item === "object") {
-          const text = (item as Record<string, unknown>).text;
-          if (typeof text === "string") return [text];
-        }
-        return [] as string[];
-      })
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const steps = value.flatMap((item) => {
+      if (typeof item === "string") return [item];
+      if (item && typeof item === "object") {
+        const text = (item as Record<string, unknown>).text;
+        if (typeof text === "string") return [text];
+      }
+      return [] as string[];
+    });
+    return normalizeInstructions(steps);
   }
   if (typeof value === "object") {
     const text = (value as Record<string, unknown>).text;
-    if (typeof text === "string") return [text];
+    if (typeof text === "string") return normalizeInstructions([text]);
   }
   return [] as string[];
 };
@@ -285,6 +329,10 @@ const normalizeIngredient = (ingredient: {
   const cleanedItem = rawItem
     .replace(/\(\s*optional\s*\)/gi, "")
     .replace(/\boptional\b/gi, "")
+    .replace(
+      /^\s*\d+(?:\.\d+)?(?:\s+\d+\/\d+)?\s*(?:[a-zA-Z]+|fl\s?oz|oz|g|kg|ml|l|tbsp|tsp|cup|cups|lb)s?\s*(?:\/\s*\d+(?:\.\d+)?(?:\s+\d+\/\d+)?\s*(?:[a-zA-Z]+|fl\s?oz|oz|g|kg|ml|l|tbsp|tsp|cup|cups|lb)s?)?\s*/i,
+      ""
+    )
     .replace(/\s{2,}/g, " ")
     .trim();
 
@@ -329,11 +377,83 @@ const normalizeAllergens = (value: unknown) => {
 };
 
 const normalizeTips = (value: unknown) => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((tip) => tip?.toString().trim())
-    .filter((tip): tip is string => !!tip)
-    .slice(0, 5);
+  if (!value) return [] as string[];
+  if (Array.isArray(value)) {
+    return value
+      .map((tip) => tip?.toString().trim())
+      .filter((tip): tip is string => !!tip)
+      .slice(0, 5);
+  }
+  if (typeof value === "string") {
+    const parts = value
+      .split(/\r?\n|•|-\s+|\d+\.|\d+\)/)
+      .map((tip) => tip.trim())
+      .filter(Boolean);
+    return parts.slice(0, 5);
+  }
+  return [] as string[];
+};
+
+const TIPS_PROMPT =
+  "Generate 3-5 practical cooking tips for this recipe based on the ingredients and instructions. Return ONLY valid JSON in this format: { tips: [string] }. Keep each tip concise.";
+
+const buildTipsContext = (recipe: {
+  title: string;
+  ingredients: Array<{ item: string }>;
+  instructions: string[];
+}) => {
+  const ingredientLines = recipe.ingredients
+    .map((ingredient) => `- ${ingredient.item}`)
+    .join("\n");
+  const instructionLines = recipe.instructions
+    .map((step) => `- ${step}`)
+    .join("\n");
+
+  return `Recipe: ${recipe.title}\nIngredients:\n${ingredientLines}\nInstructions:\n${instructionLines}`;
+};
+
+const normalizeGroupLabel = (value: string) => {
+  const trimmed = value.replace(/:$/, "").trim();
+  return trimmed.replace(/^for\s+the\s+/i, "");
+};
+
+const applyIngredientGrouping = (
+  ingredients: ReturnType<typeof normalizeIngredient>[]
+) => {
+  let currentGroup = "Ingredients";
+  const grouped: ReturnType<typeof normalizeIngredient>[] = [];
+
+  for (const ingredient of ingredients) {
+    const item = ingredient.item?.trim() ?? "";
+    const explicitGroup = ingredient.group?.trim();
+    if (explicitGroup && explicitGroup !== "Ingredients") {
+      currentGroup = explicitGroup;
+      grouped.push({ ...ingredient, group: explicitGroup });
+      continue;
+    }
+
+    const looksLikeHeader =
+      !ingredient.amount &&
+      !ingredient.unit &&
+      !!item &&
+      (/:$/.test(item) ||
+        /^(for\s+the|additions?|toppings?|topping|sauce|dressing|filling|crust|base|marinade|mix|glaze|garnish|to serve|optional)/i.test(
+          item
+        ) ||
+        (/^[A-Z0-9\s&-]{3,}$/.test(item) && item.split(" ").length <= 6));
+
+    if (looksLikeHeader) {
+      currentGroup = normalizeGroupLabel(item) || currentGroup;
+      continue;
+    }
+
+    grouped.push({
+      ...ingredient,
+      group: ingredient.group ?? currentGroup,
+    });
+  }
+
+  return grouped;
 };
 
 const normalizeAuthor = (value: unknown): string | null => {
@@ -375,6 +495,133 @@ const normalizeRating = (value: unknown) => {
   return { value: parsedValue, count: parsedCount };
 };
 
+const extractMealDbId = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    if (!parsed.hostname.includes("themealdb.com")) return null;
+    const id = parsed.searchParams.get("i");
+    return id?.trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+const parseFractionAmount = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes(" ")) {
+    const [whole, fraction] = trimmed.split(" ");
+    const wholeValue = Number.parseFloat(whole);
+    const fractionValue: number | null = parseFractionAmount(fraction);
+    if (!Number.isNaN(wholeValue) && fractionValue !== null) {
+      return wholeValue + fractionValue;
+    }
+  }
+  if (trimmed.includes("/")) {
+    const [numerator, denominator] = trimmed.split("/");
+    const numeratorValue = Number.parseFloat(numerator);
+    const denominatorValue = Number.parseFloat(denominator);
+    if (
+      Number.isFinite(numeratorValue) &&
+      Number.isFinite(denominatorValue) &&
+      denominatorValue !== 0
+    ) {
+      return numeratorValue / denominatorValue;
+    }
+  }
+  const numeric = Number.parseFloat(trimmed);
+  return Number.isNaN(numeric) ? null : numeric;
+};
+
+const parseMealDbMeasure = (value?: string) => {
+  if (!value) return { amount: null as number | null, unit: null as string | null };
+  const cleaned = value
+    .trim()
+    .replace(/½/g, "1/2")
+    .replace(/¼/g, "1/4")
+    .replace(/¾/g, "3/4")
+    .replace(/⅓/g, "1/3")
+    .replace(/⅔/g, "2/3")
+    .replace(/⅛/g, "1/8")
+    .replace(/⅜/g, "3/8")
+    .replace(/⅝/g, "5/8")
+    .replace(/⅞/g, "7/8")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return { amount: null, unit: null };
+  }
+
+  const match = cleaned.match(
+    /^(\d+(?:\.\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)\s*(.*)$/
+  );
+  if (!match) {
+    return { amount: null, unit: null };
+  }
+
+  const amountValue = parseFractionAmount(match[1]);
+  const unitValue = match[2]?.trim() || null;
+  return { amount: amountValue, unit: unitValue };
+};
+
+const fetchMealDbRecipe = async (id: string) => {
+  const response = await fetch(
+    `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${id}`
+  );
+  if (!response.ok) return null;
+  const data = (await response.json()) as { meals?: Record<string, unknown>[] };
+  const meal = data.meals?.[0];
+  if (!meal) return null;
+
+  const title = (meal.strMeal as string | undefined) ?? "Untitled Recipe";
+  const instructionsRaw =
+    (meal.strInstructions as string | undefined) ?? "";
+  const instructions = normalizeInstructions(
+    instructionsRaw
+      .split(/\r?\n/)
+      .map((step) => step.trim())
+      .filter(Boolean)
+  );
+  const imageUrl = (meal.strMealThumb as string | undefined) ?? null;
+
+  const ingredients = applyIngredientGrouping(
+    Array.from({ length: 20 })
+      .map((_, index) => {
+        const ingredient = meal[`strIngredient${index + 1}`] as
+          | string
+          | undefined;
+        const measure = meal[`strMeasure${index + 1}`] as string | undefined;
+        if (!ingredient || !ingredient.trim()) return null;
+        const parsedMeasure = parseMealDbMeasure(measure);
+        if (parsedMeasure.amount !== null || parsedMeasure.unit) {
+          return normalizeIngredient({
+            item: ingredient.trim(),
+            amount: parsedMeasure.amount,
+            unit: parsedMeasure.unit,
+          });
+        }
+        const label = measure
+          ? `${measure.trim()} ${ingredient.trim()}`
+          : ingredient.trim();
+        return normalizeIngredient({ item: label });
+      })
+      .filter(Boolean) as ReturnType<typeof normalizeIngredient>[]
+  );
+
+  return {
+    title,
+    author: null,
+    original_servings: 2,
+    image_url: imageUrl,
+    rating: { value: null, count: null },
+    allergens: [],
+    tips: [],
+    ingredients,
+    instructions,
+  };
+};
+
 const listAvailableModels = async (apiKey: string) => {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
@@ -404,7 +651,79 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing url" }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY ?? null;
+    const configuredModel =
+      process.env.GEMINI_MODEL ?? "gemini-1.5-flash-latest";
+
+    const generateTips = async (recipe: {
+      title: string;
+      ingredients: Array<{ item: string }>;
+      instructions: string[];
+    }) => {
+      if (!apiKey) return [] as string[];
+      if (!recipe.ingredients.length || !recipe.instructions.length) {
+        return [] as string[];
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const context = buildTipsContext(recipe);
+      const runTipsModel = async (modelName: string) => {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: TIPS_PROMPT,
+        });
+        const result = await model.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: context }],
+            },
+          ],
+        });
+        return result.response.text();
+      };
+
+      let text: string;
+      try {
+        text = await runTipsModel(configuredModel);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (!message.toLowerCase().includes("not found")) {
+          throw error;
+        }
+        const models = await listAvailableModels(apiKey);
+        if (!models.length) {
+          throw error;
+        }
+        const fallback = pickFallbackModel(models);
+        text = await runTipsModel(fallback);
+      }
+
+      const json = extractJson(text) as { tips?: unknown };
+      return normalizeTips(json.tips);
+    };
+
+    const mealDbId = extractMealDbId(url);
+    if (mealDbId) {
+      const mealDbRecipe = await fetchMealDbRecipe(mealDbId);
+      if (!mealDbRecipe) {
+        return NextResponse.json(
+          { error: "Unable to fetch recipe from TheMealDB." },
+          { status: 400 }
+        );
+      }
+      if (!mealDbRecipe.tips.length) {
+        const tips = await generateTips(mealDbRecipe);
+        if (tips.length) {
+          return NextResponse.json(
+            { ...mealDbRecipe, tips },
+            { status: 200 }
+          );
+        }
+      }
+      return NextResponse.json(mealDbRecipe, { status: 200 });
+    }
+
     if (!apiKey) {
       return NextResponse.json(
         { error: "GEMINI_API_KEY is not configured" },
@@ -412,7 +731,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await fetch(url);
+    // Add 10s timeout to recipe page fetch
+    let response: Response | null = null;
+    response = await fetch(url);
     if (!response.ok) {
       if ([402, 403, 451].includes(response.status)) {
         return NextResponse.json(
@@ -478,12 +799,14 @@ export async function POST(request: Request) {
         | { ratingValue?: number | string; ratingCount?: number | string }
         | undefined;
 
-      const structuredIngredients = Array.isArray(ingredientsRaw)
-        ? ingredientsRaw
-            .map((item) => (typeof item === "string" ? item : ""))
-            .filter(Boolean)
-            .map((item) => normalizeIngredient({ item }))
-        : [];
+      const structuredIngredients = applyIngredientGrouping(
+        Array.isArray(ingredientsRaw)
+          ? ingredientsRaw
+              .map((item) => (typeof item === "string" ? item : ""))
+              .filter(Boolean)
+              .map((item) => normalizeIngredient({ item }))
+          : []
+      );
       const structuredInstructions = normalizeSchemaInstructions(instructionsRaw);
 
       if (structuredIngredients.length && structuredInstructions.length) {
@@ -534,15 +857,13 @@ export async function POST(request: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const configuredModel =
-      process.env.GEMINI_MODEL ?? "gemini-1.5-flash-latest";
 
     const runModel = async (modelName: string) => {
       const model = genAI.getGenerativeModel({
         model: modelName,
         systemInstruction: SYSTEM_PROMPT,
       });
-
+      // Add 10s timeout to LLM call
       const result = await model.generateContent({
         contents: [
           {
@@ -551,7 +872,6 @@ export async function POST(request: Request) {
           },
         ],
       });
-
       return result.response.text();
     };
 
@@ -571,6 +891,7 @@ export async function POST(request: Request) {
       }
 
       const fallback = pickFallbackModel(models);
+      // Only try fallback if the first model fails, not just slow
       text = await runModel(fallback);
     }
 
@@ -591,7 +912,7 @@ export async function POST(request: Request) {
       instructions?: string[];
     };
 
-    const normalized: ParsedRecipe = {
+    let normalized: ParsedRecipe = {
       title: json.title ?? "Untitled Recipe",
       author: json.author ?? null,
       original_servings: Number.isFinite(json.original_servings)
@@ -601,16 +922,25 @@ export async function POST(request: Request) {
       rating: normalizeRating(json.rating),
       allergens: normalizeAllergens(json.allergens),
       tips: normalizeTips(json.tips),
-      ingredients: Array.isArray(json.ingredients)
-        ? json.ingredients.map(normalizeIngredient)
-        : [],
+      ingredients: applyIngredientGrouping(
+        Array.isArray(json.ingredients)
+          ? json.ingredients.map(normalizeIngredient)
+          : []
+      ),
       instructions: Array.isArray(json.instructions)
-        ? json.instructions
+        ? normalizeInstructions(json.instructions)
         : [],
     };
 
+    if (!normalized.tips.length) {
+      const tips = await generateTips(normalized);
+      if (tips.length) {
+        normalized = { ...normalized, tips };
+      }
+    }
+
     if (structuredRecipe) {
-      const merged = {
+      let merged = {
         ...structuredRecipe,
         ...normalized,
         image_url:
@@ -628,6 +958,12 @@ export async function POST(request: Request) {
             : structuredRecipe.rating,
         author: normalized.author || structuredRecipe.author || null,
       };
+      if (!merged.tips.length) {
+        const tips = await generateTips(merged);
+        if (tips.length) {
+          merged = { ...merged, tips };
+        }
+      }
       return NextResponse.json(merged, { status: 200 });
     }
 

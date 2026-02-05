@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { useRecipeMath } from "@/hooks/useRecipeMath";
 import type { Recipe } from "@/types/recipe";
 
@@ -221,6 +222,14 @@ export const RecipeCard = ({
     return `${first} ${last[0].toUpperCase()}.`;
   }, [recipe.author]);
 
+  const displaySourceUrl = useMemo(() => {
+    if (!sourceUrl) return null;
+    if (!/^https?:\/\//i.test(sourceUrl)) return null;
+    return sourceUrl.includes("themealdb.com")
+      ? "https://www.themealdb.com/"
+      : sourceUrl;
+  }, [sourceUrl]);
+
   const sliderRange = useMemo(() => {
     const min = Math.max(1, recipe.original_servings - 4);
     const max = recipe.original_servings + 6;
@@ -260,18 +269,21 @@ export const RecipeCard = ({
           <h1 className="text-4xl leading-tight text-[#111111]">
             {computed.title}
           </h1>
-          {sourceUrl ? (
-            <a
-              href={sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs uppercase tracking-[0.2em] text-[#111111]/60 underline decoration-black/20 underline-offset-4 transition-colors duration-300 hover:text-[#111111]"
-            >
-              Original source
-            </a>
-          ) : null}
           <div className="flex flex-wrap items-center gap-3 text-sm text-[#111111]/70">
             <span>{servingsLabel(computed.servings)}</span>
+            {displaySourceUrl ? (
+              <>
+                <span>•</span>
+                <a
+                  href={displaySourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs uppercase tracking-[0.2em] text-[#111111]/60 underline decoration-black/20 underline-offset-4 transition-colors duration-300 hover:text-[#111111]"
+                >
+                  Original source
+                </a>
+              </>
+            ) : null}
             {recipe.rating?.value ? (
               <>
                 <span>•</span>
@@ -294,6 +306,24 @@ export const RecipeCard = ({
             ) : null}
           </div>
         </header>
+
+        {showSave ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button
+              onClick={onSave}
+              disabled={isSaving}
+              variant="destructive"
+              size="md"
+            >
+              {isSaving ? "Saving…" : "Save"}
+            </Button>
+            {saveMessage ? (
+              <p className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
+                {saveMessage}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="grid gap-6 rounded-2xl border border-black/10 bg-white/70 p-6 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_-45px_rgba(0,0,0,0.4)]">
           <div className="grid gap-2">
@@ -318,34 +348,20 @@ export const RecipeCard = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-[#111111]/70">Units</span>
-                <button
-                  type="button"
+                <Button
                   onClick={() => setIsMetric((prev) => !prev)}
-                  className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#111111] transition-all duration-300 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 hover:shadow-[0_8px_20px_-14px_rgba(17,17,17,0.6)] hover:ring-1 hover:ring-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/50"
+                  variant="chip"
+                  size="sm"
+                  className="tracking-[0.15em] text-[#111111]"
                 >
                   {isMetric ? "Metric" : "Imperial"}
-                </button>
+                </Button>
               </div>
               <span className="text-xs text-[#111111]/50">
                 Tap to switch between Metric and Imperial.
               </span>
             </div>
-            {showSave ? (
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={isSaving}
-                className="cursor-pointer rounded-full bg-[#D9534F] px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#C94743] hover:shadow-[0_12px_28px_-18px_rgba(217,83,79,0.7)] hover:ring-1 hover:ring-[#D9534F]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9534F] disabled:opacity-60"
-              >
-                {isSaving ? "Saving…" : "Save"}
-              </button>
-            ) : null}
           </div>
-          {saveMessage ? (
-            <p className="text-xs uppercase tracking-[0.2em] text-[#111111]/60">
-              {saveMessage}
-            </p>
-          ) : null}
         </div>
 
         <div className="grid gap-10">
@@ -382,8 +398,7 @@ export const RecipeCard = ({
                             {inferred.length > 0 && (
                               <span className="flex max-w-[40%] items-center gap-2 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                 {inferred.map((allergen) => (
-                                  <button
-                                    type="button"
+                                  <Button
                                     key={`${ingredient.item}-${allergen}`}
                                     onClick={() =>
                                       setOpenAllergen((prev) =>
@@ -392,8 +407,14 @@ export const RecipeCard = ({
                                           : `${ingredient.item}-${allergen}`
                                       )
                                     }
-                                    className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[#111111]/70 whitespace-nowrap transition-all duration-200 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/5 hover:text-[#111111]"
+                                    variant="chip"
+                                    size="sm"
+                                    className="gap-1 px-2 py-1 text-[10px] whitespace-nowrap"
                                     aria-pressed={
+                                      openAllergen ===
+                                      `${ingredient.item}-${allergen}`
+                                    }
+                                    active={
                                       openAllergen ===
                                       `${ingredient.item}-${allergen}`
                                     }
@@ -404,7 +425,7 @@ export const RecipeCard = ({
                                     <span className="font-semibold">
                                       {ALLERGEN_RULES[allergen]?.label ?? allergen[0]}
                                     </span>
-                                  </button>
+                                  </Button>
                                 ))}
                               </span>
                             )}
