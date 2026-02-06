@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Lora, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Analytics } from "@vercel/analytics/next";
 
 const playfair = Playfair_Display({
   variable: "--font-display",
@@ -46,6 +47,7 @@ export default function RootLayout({
       >
         <ThemeToggle />
         {children}
+        <Analytics />
         <footer
           className="mt-20 bg-[#111111] text-[#FAFAFA]"
           suppressHydrationWarning
